@@ -58,3 +58,12 @@ export function formatShortDateTime(value?: string | null) {
 
   return format(new Date(value), 'dd.MM HH:mm')
 }
+
+/** Только время суток (для подсказок «разгадано в …»). */
+export function formatTimeOnly(value?: string | null) {
+  if (!value) {
+    return ''
+  }
+
+  return format(new Date(value), 'HH:mm')
+}

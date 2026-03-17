@@ -26,6 +26,7 @@ import {
 } from '@/shared/contracts/api'
 import { useAdminLogout, useAdminSession } from '@/features/session/session-hooks'
 import { AlertBox, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Divider, EmptyState, Input, JsonBlock, KeyValue, LoadingScreen, PageHeader, StatCard, TagChip, Textarea } from '@/shared/ui/ui'
+import { questDayStatusLabel } from '@/shared/utils/quest-day'
 import { formatDateTime, formatShortDateTime } from '@/shared/utils/time'
 
 const tagSchema = z.object({
@@ -38,7 +39,7 @@ const tagSchema = z.object({
 })
 
 const questionSchema = z.object({
-  tagId: z.string().min(1, 'Select a tag'),
+  tagId: z.string().min(1, 'Выберите тег'),
   title: z.string().trim().min(2, 'Title is required'),
   bodyRichText: z.string().trim().min(1, 'Question body is required'),
   footerHint: z.string().trim().min(1, 'Footer hint is required'),
@@ -58,7 +59,7 @@ const questionSchema = z.object({
 })
 
 const poolSchema = z.object({
-  tagId: z.string().min(1, 'Select a tag'),
+  tagId: z.string().min(1, 'Выберите тег'),
   name: z.string().trim().min(2, 'Name is required'),
   isActive: z.boolean(),
   isArchived: z.boolean(),
@@ -66,7 +67,7 @@ const poolSchema = z.object({
   sortOrder: z.coerce.number(),
   entries: z.array(
     z.object({
-      questionId: z.string().min(1, 'Select a question'),
+      questionId: z.string().min(1, 'Выберите вопрос'),
       position: z.coerce.number(),
       isEnabled: z.boolean(),
       notes: z.string().optional(),
@@ -75,7 +76,7 @@ const poolSchema = z.object({
 })
 
 const qrSchema = z.object({
-  tagId: z.string().min(1, 'Select a tag'),
+  tagId: z.string().min(1, 'Выберите тег'),
   slug: z.string().trim().min(4, 'Slug is required'),
   label: z.string().trim().min(2, 'Label is required'),
   slotIndex: z.coerce.number(),
@@ -99,24 +100,24 @@ const routingSchema = z.object({
 })
 
 const overrideSchema = z.object({
-  qrCodeId: z.string().min(1, 'Select QR'),
-  questionId: z.string().min(1, 'Select question'),
+  qrCodeId: z.string().min(1, 'Выберите QR'),
+  questionId: z.string().min(1, 'Выберите вопрос'),
   scopeProfileId: z.string().optional(),
   isActive: z.boolean(),
   reason: z.string().optional(),
 })
 
 const enigmaSchema = z.object({
-  name: z.string().trim().min(2, 'Name is required'),
+  name: z.string().trim().min(2, 'Укажите название'),
   mode: z.enum(['HistoricalLike', 'SimpleCombination']),
   isActive: z.boolean(),
   attemptCooldownMinutes: z.coerce.number().min(0),
-  successMessage: z.string().trim().min(1, 'Success message is required'),
-  failureMessage: z.string().trim().min(1, 'Failure message is required'),
+  successMessage: z.string().trim().min(1, 'Укажите сообщение при успехе'),
+  failureMessage: z.string().trim().min(1, 'Укажите сообщение при неудаче'),
   rotors: z.array(
     z.object({
-      tagId: z.string().min(1, 'Select a tag'),
-      label: z.string().trim().min(1, 'Label is required'),
+      tagId: z.string().min(1, 'Выберите тег'),
+      label: z.string().trim().min(1, 'Укажите подпись'),
       colorOverride: z.string().optional(),
       displayOrder: z.coerce.number(),
       positionMin: z.coerce.number(),
@@ -144,10 +145,10 @@ const questDayMessagesSchema = z.object({
 })
 
 const rewardAdjustSchema = z.object({
-  tagId: z.string().min(1, 'Select a tag'),
+  tagId: z.string().min(1, 'Выберите тег'),
   sourceQuestionId: z.string().optional(),
   revoke: z.boolean(),
-  rewardType: z.string().trim().min(1, 'Reward type is required'),
+  rewardType: z.string().trim().min(1, 'Укажите тип награды'),
 })
 
 type TagFormInput = z.input<typeof tagSchema>
@@ -253,7 +254,7 @@ function AdminListCard({
           {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
         </div>
         <div className="flex flex-wrap gap-2">
-          {typeof isActive === 'boolean' ? <Badge tone={isActive ? 'success' : 'warning'}>{isActive ? 'Active' : 'Inactive'}</Badge> : null}
+          {typeof isActive === 'boolean' ? <Badge tone={isActive ? 'success' : 'warning'}>{isActive ? 'Активен' : 'Неактивен'}</Badge> : null}
           {badges}
         </div>
       </div>
@@ -469,8 +470,8 @@ function defaultEnigmaForm(): EnigmaFormValues {
     mode: 'SimpleCombination',
     isActive: false,
     attemptCooldownMinutes: 5,
-    successMessage: 'Success',
-    failureMessage: 'Failure',
+    successMessage: 'Успех',
+    failureMessage: 'Неудача',
     rotors: [],
   }
 }
@@ -525,67 +526,71 @@ export function AdminDashboardPage() {
   const questDay = useQuery({ queryKey: queryKeys.adminQuestDay, queryFn: adminApi.questDay })
 
   if ([tags, questions, qr, routing, enigma, questDay].some((item) => item.isPending)) {
-    return <LoadingScreen label="Собираю admin overview..." />
+    return <LoadingScreen label="Загружаю обзор..." />
   }
 
   return (
     <section className="space-y-6">
-      <PageHeader title="Admin Overview" description="Сводка по configuration и операционным зонам backend." />
+      <PageHeader title="Обзор" description="Сводка по конфигурации и операциям." />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Quest day" value={questDay.data?.status ?? 'n/a'} hint={questDay.data?.message} />
-        <StatCard label="Tags" value={tags.data?.length ?? 0} />
-        <StatCard label="Questions" value={questions.data?.length ?? 0} />
-        <StatCard label="QR codes" value={qr.data?.length ?? 0} />
+        <StatCard
+          label="Игровой день"
+          value={questDay.data?.status ? questDayStatusLabel(questDay.data.status) : '—'}
+          hint={questDay.data?.message}
+        />
+        <StatCard label="Теги" value={tags.data?.length ?? 0} />
+        <StatCard label="Вопросы" value={questions.data?.length ?? 0} />
+        <StatCard label="QR-коды" value={qr.data?.length ?? 0} />
       </div>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle>Routing</CardTitle>
-            <CardDescription>{routing.data?.length ?? 0} profiles configured.</CardDescription>
+            <CardTitle>Маршрутизация</CardTitle>
+            <CardDescription>Профилей: {routing.data?.length ?? 0}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {routing.data?.slice(0, 3).map((profile) => (
               <div key={profile.id} className="flex items-center justify-between rounded-2xl border border-border p-3 text-sm">
                 <span>{profile.name}</span>
-                <Badge tone={profile.isActive ? 'success' : 'default'}>{profile.isActive ? 'Active' : 'Inactive'}</Badge>
+                <Badge tone={profile.isActive ? 'success' : 'default'}>{profile.isActive ? 'Активен' : 'Неактивен'}</Badge>
               </div>
             ))}
             <Button asChild variant="outline" className="w-full">
-              <Link to="/admin/routing">Открыть routing</Link>
+              <Link to="/admin/routing">Открыть маршрутизацию</Link>
             </Button>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
             <CardTitle>Enigma</CardTitle>
-            <CardDescription>{enigma.data?.length ?? 0} profiles configured.</CardDescription>
+            <CardDescription>Профилей: {enigma.data?.length ?? 0}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
             {enigma.data?.slice(0, 3).map((profile) => (
               <div key={profile.id} className="flex items-center justify-between rounded-2xl border border-border p-3 text-sm">
                 <span>{profile.name}</span>
-                <Badge tone={profile.isActive ? 'success' : 'default'}>{profile.isActive ? 'Active' : 'Inactive'}</Badge>
+                <Badge tone={profile.isActive ? 'success' : 'default'}>{profile.isActive ? 'Активен' : 'Неактивен'}</Badge>
               </div>
             ))}
             <Button asChild variant="outline" className="w-full">
-              <Link to="/admin/enigma">Открыть Enigma profiles</Link>
+              <Link to="/admin/enigma">Профили Enigma</Link>
             </Button>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Support & Audit</CardTitle>
-            <CardDescription>Ручные корректировки и журнал изменений.</CardDescription>
+            <CardTitle>Команды и аудит</CardTitle>
+            <CardDescription>Ручные правки и журнал.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             <Button asChild variant="outline">
-              <Link to="/admin/support/teams">Support teams</Link>
+              <Link to="/admin/support/teams">Команды</Link>
             </Button>
             <Button asChild variant="outline">
-              <Link to="/admin/audit">Audit explorer</Link>
+              <Link to="/admin/audit">Аудит</Link>
             </Button>
             <Button asChild variant="outline">
-              <Link to="/admin/quest-day">Quest day console</Link>
+              <Link to="/admin/quest-day">Игровой день</Link>
             </Button>
           </CardContent>
         </Card>
@@ -639,11 +644,11 @@ export function AdminTagsPage() {
     mutationFn: (values: TagFormValues) =>
       selected ? adminApi.updateTag(selected.id, { ...values, description: normalizeOptional(values.description) }) : adminApi.createTag({ ...values, description: normalizeOptional(values.description) }),
     onSuccess: async (result) => {
-      toast.success(selected ? 'Tag updated' : 'Tag created')
+      toast.success(selected ? 'Тег обновлён' : 'Тег создан')
       setSelectedId(result.id)
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminTags })
     },
-    onError: (error) => handleMutationError(error, 'Failed to save tag'),
+    onError: (error) => handleMutationError(error, 'Не удалось сохранить тег'),
   })
 
   const filtered = useMemo(
@@ -655,13 +660,13 @@ export function AdminTagsPage() {
   )
 
   if (tags.isPending) {
-    return <LoadingScreen label="Loading tags..." />
+    return <LoadingScreen label="Загружаю теги..." />
   }
 
   return (
     <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
       <div className="space-y-4">
-        <PageHeader title="Tags" description="Базовый словарь игровых цветов и категорий вопросов." actions={<Button onClick={() => setSelectedId('new')}>Новый tag</Button>} />
+        <PageHeader title="Теги" description="Цвета и категории вопросов." actions={<Button onClick={() => setSelectedId('new')}>Новый тег</Button>} />
         <SearchField value={search} onChange={setSearch} placeholder="Filter tags..." />
         <div className="space-y-3">
           {filtered.map((tag) => (
@@ -679,32 +684,32 @@ export function AdminTagsPage() {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>{selected ? 'Edit tag' : 'Create tag'}</CardTitle>
-          <CardDescription>Tag color затем используется в вопросах, QR и роторах Enigma.</CardDescription>
+          <CardTitle>{selected ? 'Редактировать тег' : 'Новый тег'}</CardTitle>
+          <CardDescription>Цвет тега используется в вопросах, QR и роторах Enigma.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => saveTag.mutate(values))}>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Code" error={form.formState.errors.code?.message}>
+              <Field label="Код" error={form.formState.errors.code?.message}>
                 <Input {...form.register('code')} placeholder="red" />
               </Field>
-              <Field label="Name" error={form.formState.errors.name?.message}>
-                <Input {...form.register('name')} placeholder="Red rotor" />
+              <Field label="Название" error={form.formState.errors.name?.message}>
+                <Input {...form.register('name')} placeholder="Красный ротор" />
               </Field>
-              <Field label="Color" error={form.formState.errors.color?.message}>
+              <Field label="Цвет" error={form.formState.errors.color?.message}>
                 <Input {...form.register('color')} placeholder="#ef4444" />
               </Field>
-              <Field label="Sort order" error={form.formState.errors.sortOrder?.message}>
+              <Field label="Порядок сортировки" error={form.formState.errors.sortOrder?.message}>
                 <Input type="number" {...form.register('sortOrder')} />
               </Field>
             </div>
-            <Field label="Description" error={form.formState.errors.description?.message}>
+            <Field label="Описание" error={form.formState.errors.description?.message}>
               <Textarea rows={4} {...form.register('description')} />
             </Field>
-            <ToggleField label="Active tag" description="Inactive tags do not participate in routing." {...form.register('isActive')} checked={form.watch('isActive')} />
+            <ToggleField label="Тег активен" description="Неактивные теги не участвуют в маршрутизации." {...form.register('isActive')} checked={form.watch('isActive')} />
             <Button type="submit" className="w-full" disabled={saveTag.isPending}>
               <Save className="h-4 w-4" />
-              {saveTag.isPending ? 'Saving...' : selected ? 'Update tag' : 'Create tag'}
+              {saveTag.isPending ? 'Сохранение...' : selected ? 'Сохранить тег' : 'Создать тег'}
             </Button>
           </form>
         </CardContent>
@@ -733,21 +738,21 @@ export function AdminQuestionsPage() {
   const saveQuestion = useMutation({
     mutationFn: (values: QuestionFormValues) => (selected ? adminApi.updateQuestion(selected.id, toQuestionPayload(values)) : adminApi.createQuestion(toQuestionPayload(values))),
     onSuccess: async (result) => {
-      toast.success(selected ? 'Question updated' : 'Question created')
+      toast.success(selected ? 'Вопрос обновлён' : 'Вопрос создан')
       setSelectedId(result.id)
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminQuestions })
     },
-    onError: (error) => handleMutationError(error, 'Failed to save question'),
+    onError: (error) => handleMutationError(error, 'Не удалось сохранить вопрос'),
   })
 
   const duplicateQuestion = useMutation({
     mutationFn: (id: Id) => adminApi.duplicateQuestion(id),
     onSuccess: async (result) => {
-      toast.success('Question duplicated')
+      toast.success('Вопрос скопирован')
       setSelectedId(result.id)
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminQuestions })
     },
-    onError: (error) => handleMutationError(error, 'Failed to duplicate question'),
+    onError: (error) => handleMutationError(error, 'Не удалось скопировать вопрос'),
   })
 
   const filtered = useMemo(
@@ -759,13 +764,13 @@ export function AdminQuestionsPage() {
   )
 
   if (tags.isPending || questions.isPending) {
-    return <LoadingScreen label="Loading questions..." />
+    return <LoadingScreen label="Загружаю вопросы..." />
   }
 
   return (
     <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="space-y-4">
-        <PageHeader title="Questions" description="Question bank, answer schema и soft-state flags." actions={<Button onClick={() => setSelectedId('new')}>Новый question</Button>} />
+        <PageHeader title="Вопросы" description="Банк вопросов, схема ответов и флаги." actions={<Button onClick={() => setSelectedId('new')}>Новый вопрос</Button>} />
         <SearchField value={search} onChange={setSearch} placeholder="Filter questions..." />
         <div className="space-y-3">
           {filtered.map((question) => (
@@ -783,15 +788,15 @@ export function AdminQuestionsPage() {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>{selected ? 'Edit question' : 'Create question'}</CardTitle>
-          <CardDescription>Body and footer are rendered in the player UI as rich text.</CardDescription>
+          <CardTitle>{selected ? 'Редактировать вопрос' : 'Новый вопрос'}</CardTitle>
+          <CardDescription>Текст и подсказка отображаются участникам как форматированный текст.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => saveQuestion.mutate(values))}>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Tag" error={form.formState.errors.tagId?.message}>
+              <Field label="Тег" error={form.formState.errors.tagId?.message}>
                 <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('tagId')}>
-                  <option value="">Select tag</option>
+                  <option value="">Выберите тег</option>
                   {tags.data?.map((tag) => (
                     <option key={tag.id} value={tag.id}>
                       {tag.name}
@@ -799,63 +804,63 @@ export function AdminQuestionsPage() {
                   ))}
                 </select>
               </Field>
-              <Field label="Status" error={form.formState.errors.status?.message}>
+              <Field label="Статус" error={form.formState.errors.status?.message}>
                 <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('status')}>
-                  <option value="Draft">Draft</option>
-                  <option value="Active">Active</option>
-                  <option value="Disabled">Disabled</option>
-                  <option value="Archived">Archived</option>
+                  <option value="Draft">Черновик</option>
+                  <option value="Active">Активен</option>
+                  <option value="Disabled">Отключён</option>
+                  <option value="Archived">Архив</option>
                 </select>
               </Field>
             </div>
-            <Field label="Title" error={form.formState.errors.title?.message}>
+            <Field label="Заголовок" error={form.formState.errors.title?.message}>
               <Input {...form.register('title')} />
             </Field>
-            <Field label="Body rich text" error={form.formState.errors.bodyRichText?.message}>
+            <Field label="Текст вопроса" error={form.formState.errors.bodyRichText?.message}>
               <Textarea rows={8} {...form.register('bodyRichText')} />
             </Field>
-            <Field label="Footer hint" error={form.formState.errors.footerHint?.message}>
+            <Field label="Подсказка в футере" error={form.formState.errors.footerHint?.message}>
               <Textarea rows={4} {...form.register('footerHint')} />
             </Field>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Image URL" error={form.formState.errors.imageUrl?.message}>
+              <Field label="URL изображения" error={form.formState.errors.imageUrl?.message}>
                 <Input {...form.register('imageUrl')} placeholder="https://..." />
               </Field>
-              <Field label="Support notes" error={form.formState.errors.supportNotes?.message}>
-                <Input {...form.register('supportNotes')} placeholder="Internal notes" />
+              <Field label="Заметки для организаторов" error={form.formState.errors.supportNotes?.message}>
+                <Input {...form.register('supportNotes')} placeholder="Внутренние заметки" />
               </Field>
             </div>
             <Divider />
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Answer kind" error={form.formState.errors.answerKind?.message}>
+              <Field label="Тип ответа" error={form.formState.errors.answerKind?.message}>
                 <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('answerKind')}>
-                  <option value="ExactText">ExactText</option>
+                  <option value="ExactText">Точный текст</option>
                   <option value="NormalizedText">NormalizedText</option>
-                  <option value="Numeric">Numeric</option>
+                  <option value="Numeric">Число</option>
                 </select>
               </Field>
-              <Field label="Accepted answers" hint="One answer per line" error={form.formState.errors.acceptedAnswersText?.message}>
+              <Field label="Правильные ответы" hint="Один ответ на строку" error={form.formState.errors.acceptedAnswersText?.message}>
                 <Textarea rows={4} {...form.register('acceptedAnswersText')} />
               </Field>
-              <Field label="Expected numeric value" error={form.formState.errors.expectedNumericValue?.message}>
+              <Field label="Ожидаемое число" error={form.formState.errors.expectedNumericValue?.message}>
                 <Input {...form.register('expectedNumericValue')} placeholder="42" />
               </Field>
-              <Field label="Numeric tolerance" error={form.formState.errors.numericTolerance?.message}>
+              <Field label="Допуск (число)" error={form.formState.errors.numericTolerance?.message}>
                 <Input {...form.register('numericTolerance')} placeholder="0.5" />
               </Field>
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <ToggleField label="Question is active" {...form.register('isActive')} checked={form.watch('isActive')} />
-              <ToggleField label="Question is archived" {...form.register('isArchived')} checked={form.watch('isArchived')} />
-              <ToggleField label="Trim whitespace" {...form.register('trimWhitespace')} checked={form.watch('trimWhitespace')} />
-              <ToggleField label="Ignore case" {...form.register('ignoreCase')} checked={form.watch('ignoreCase')} />
-              <ToggleField label="Collapse inner whitespace" {...form.register('collapseInnerWhitespace')} checked={form.watch('collapseInnerWhitespace')} />
-              <ToggleField label="Remove punctuation" {...form.register('removePunctuation')} checked={form.watch('removePunctuation')} />
+              <ToggleField label="Вопрос активен" {...form.register('isActive')} checked={form.watch('isActive')} />
+              <ToggleField label="Вопрос в архиве" {...form.register('isArchived')} checked={form.watch('isArchived')} />
+              <ToggleField label="Убирать пробелы по краям" {...form.register('trimWhitespace')} checked={form.watch('trimWhitespace')} />
+              <ToggleField label="Не учитывать регистр" {...form.register('ignoreCase')} checked={form.watch('ignoreCase')} />
+              <ToggleField label="Схлопывать пробелы внутри" {...form.register('collapseInnerWhitespace')} checked={form.watch('collapseInnerWhitespace')} />
+              <ToggleField label="Убирать знаки препинания" {...form.register('removePunctuation')} checked={form.watch('removePunctuation')} />
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <Button type="submit" disabled={saveQuestion.isPending}>
                 <Save className="h-4 w-4" />
-                {saveQuestion.isPending ? 'Saving...' : selected ? 'Update question' : 'Create question'}
+                {saveQuestion.isPending ? 'Сохранение...' : selected ? 'Сохранить вопрос' : 'Создать вопрос'}
               </Button>
               {selected ? (
                 <Button type="button" variant="outline" onClick={() => duplicateQuestion.mutate(selected.id)} disabled={duplicateQuestion.isPending}>
@@ -896,22 +901,22 @@ export function AdminPoolsPage() {
   const savePool = useMutation({
     mutationFn: (values: PoolFormValues) => (selected ? adminApi.updatePool(selected.id, toPoolPayload(values)) : adminApi.createPool(toPoolPayload(values))),
     onSuccess: async (result) => {
-      toast.success(selected ? 'Pool updated' : 'Pool created')
+      toast.success(selected ? 'Пул обновлён' : 'Пул создан')
       setSelectedId(result.id)
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminPools })
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingPreview })
     },
-    onError: (error) => handleMutationError(error, 'Failed to save pool'),
+    onError: (error) => handleMutationError(error, 'Не удалось сохранить пул'),
   })
 
   if (tags.isPending || questions.isPending || pools.isPending) {
-    return <LoadingScreen label="Loading pools..." />
+    return <LoadingScreen label="Загружаю пулы..." />
   }
 
   return (
     <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="space-y-4">
-        <PageHeader title="Question Pools" description="Pool entries полностью заменяются backend'ом при update, поэтому UI всегда refetch'ит список." actions={<Button onClick={() => setSelectedId('new')}>Новый pool</Button>} />
+        <PageHeader title="Пулы вопросов" description="При сохранении список на сервере полностью заменяется — после правок выполняется обновление." actions={<Button onClick={() => setSelectedId('new')}>Новый пул</Button>} />
         <div className="space-y-3">
           {pools.data?.map((pool) => (
             <AdminListCard
@@ -928,15 +933,15 @@ export function AdminPoolsPage() {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>{selected ? 'Edit pool' : 'Create pool'}</CardTitle>
-          <CardDescription>Simple reorder UX: position field + up/down buttons per entry.</CardDescription>
+          <CardTitle>{selected ? 'Редактировать пул' : 'Новый пул'}</CardTitle>
+          <CardDescription>Порядок элементов: поле позиции и кнопки вверх/вниз.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => savePool.mutate(values))}>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Tag" error={form.formState.errors.tagId?.message}>
+              <Field label="Тег" error={form.formState.errors.tagId?.message}>
                 <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('tagId')}>
-                  <option value="">Select tag</option>
+                  <option value="">Выберите тег</option>
                   {tags.data?.map((tag) => (
                     <option key={tag.id} value={tag.id}>
                       {tag.name}
@@ -944,24 +949,24 @@ export function AdminPoolsPage() {
                   ))}
                 </select>
               </Field>
-              <Field label="Sort order" error={form.formState.errors.sortOrder?.message}>
+              <Field label="Порядок сортировки" error={form.formState.errors.sortOrder?.message}>
                 <Input type="number" {...form.register('sortOrder')} />
               </Field>
             </div>
-            <Field label="Name" error={form.formState.errors.name?.message}>
+            <Field label="Название" error={form.formState.errors.name?.message}>
               <Input {...form.register('name')} />
             </Field>
-            <Field label="Description" error={form.formState.errors.description?.message}>
+            <Field label="Описание" error={form.formState.errors.description?.message}>
               <Textarea rows={4} {...form.register('description')} />
             </Field>
             <div className="grid gap-3 md:grid-cols-2">
-              <ToggleField label="Pool is active" {...form.register('isActive')} checked={form.watch('isActive')} />
-              <ToggleField label="Pool is archived" {...form.register('isArchived')} checked={form.watch('isArchived')} />
+              <ToggleField label="Пул активен" {...form.register('isActive')} checked={form.watch('isActive')} />
+              <ToggleField label="Пул в архиве" {...form.register('isArchived')} checked={form.watch('isArchived')} />
             </div>
             <Divider />
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-foreground">Entries</h3>
+                <h3 className="font-semibold text-foreground">Записи</h3>
                 <Button
                   type="button"
                   variant="outline"
@@ -978,14 +983,14 @@ export function AdminPoolsPage() {
                 </Button>
               </div>
               {entriesArray.fields.length === 0 ? (
-                <EmptyState title="Пока нет entries" description="Добавьте вопросы в нужном порядке, чтобы pool начал участвовать в routing." />
+                <EmptyState title="Пока нет записей" description="Добавьте вопросы в нужном порядке — тогда пул начнёт участвовать в маршрутизации." />
               ) : (
                 entriesArray.fields.map((field, index) => (
                   <div key={field.id} className="rounded-3xl border border-border bg-background/70 p-4">
                     <div className="grid gap-4 md:grid-cols-2">
-                      <Field label="Question">
+                      <Field label="Вопрос">
                         <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register(`entries.${index}.questionId`)}>
-                          <option value="">Select question</option>
+                          <option value="">Выберите вопрос</option>
                           {availableQuestions.map((question) => (
                             <option key={question.id} value={question.id}>
                               {question.title}
@@ -993,15 +998,15 @@ export function AdminPoolsPage() {
                           ))}
                         </select>
                       </Field>
-                      <Field label="Position">
+                      <Field label="Позиция">
                         <Input type="number" {...form.register(`entries.${index}.position`)} />
                       </Field>
                     </div>
-                    <Field label="Notes">
+                    <Field label="Заметки">
                       <Input {...form.register(`entries.${index}.notes`)} />
                     </Field>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <ToggleField label="Enabled" {...form.register(`entries.${index}.isEnabled`)} checked={form.watch(`entries.${index}.isEnabled`)} />
+                      <ToggleField label="Включён" {...form.register(`entries.${index}.isEnabled`)} checked={form.watch(`entries.${index}.isEnabled`)} />
                       <Button type="button" variant="outline" onClick={() => index > 0 && entriesArray.swap(index, index - 1)}>
                         Up
                       </Button>
@@ -1017,7 +1022,7 @@ export function AdminPoolsPage() {
               )}
             </div>
             <Button type="submit" className="w-full" disabled={savePool.isPending}>
-              {savePool.isPending ? 'Saving...' : selected ? 'Update pool' : 'Create pool'}
+              {savePool.isPending ? 'Сохранение...' : selected ? 'Сохранить пул' : 'Создать пул'}
             </Button>
           </form>
         </CardContent>
@@ -1066,16 +1071,16 @@ export function AdminQrPage() {
       return selected ? adminApi.updateQrCode(selected.id, payload) : adminApi.createQrCode(payload)
     },
     onSuccess: async (result) => {
-      toast.success(selected ? 'QR updated' : 'QR created')
+      toast.success(selected ? 'QR обновлён' : 'QR создан')
       setSelectedId(result.id)
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminQr })
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingPreview })
     },
-    onError: (error) => handleMutationError(error, 'Failed to save QR code'),
+    onError: (error) => handleMutationError(error, 'Не удалось сохранить QR-код'),
   })
 
   if (tags.isPending || qrCodes.isPending) {
-    return <LoadingScreen label="Loading QR codes..." />
+    return <LoadingScreen label="Загружаю QR..." />
   }
 
   const browserRoute = watchedSlug ? `/q/${watchedSlug}` : '/q/{slug}'
@@ -1083,7 +1088,7 @@ export function AdminQrPage() {
   return (
     <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="space-y-4">
-        <PageHeader title="QR Management" description="Slug, slotIndex и client-side QR preview для печати." actions={<Button onClick={() => setSelectedId('new')}>Новый QR</Button>} />
+        <PageHeader title="QR-коды" description="Slug, слот и предпросмотр для печати." actions={<Button onClick={() => setSelectedId('new')}>Новый QR</Button>} />
         <div className="space-y-3">
           {qrCodes.data?.map((qrCode) => (
             <AdminListCard
@@ -1101,15 +1106,15 @@ export function AdminQrPage() {
       <div className="space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>{selected ? 'Edit QR code' : 'Create QR code'}</CardTitle>
-          <CardDescription>Frontend owns browser route `/q/:slug`, while QR resolution JSON comes from backend API `/api/public/qr/:slug`.</CardDescription>
+            <CardTitle>{selected ? 'Редактировать QR' : 'Новый QR'}</CardTitle>
+          <CardDescription>Участники открывают QR по адресу /q/:slug.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={form.handleSubmit((values) => saveQr.mutate(values))}>
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Tag" error={form.formState.errors.tagId?.message}>
+                <Field label="Тег" error={form.formState.errors.tagId?.message}>
                   <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('tagId')}>
-                    <option value="">Select tag</option>
+                    <option value="">Выберите тег</option>
                     {tags.data?.map((tag) => (
                       <option key={tag.id} value={tag.id}>
                         {tag.name}
@@ -1117,37 +1122,37 @@ export function AdminQrPage() {
                     ))}
                   </select>
                 </Field>
-                <Field label="Slot index" error={form.formState.errors.slotIndex?.message}>
+                <Field label="Индекс слота" error={form.formState.errors.slotIndex?.message}>
                   <Input type="number" {...form.register('slotIndex')} />
                 </Field>
               </div>
-              <Field label="Label" error={form.formState.errors.label?.message}>
+              <Field label="Подпись" error={form.formState.errors.label?.message}>
                 <Input {...form.register('label')} />
               </Field>
-              <Field label="Slug" error={form.formState.errors.slug?.message}>
+              <Field label="Slug (короткий URL)" error={form.formState.errors.slug?.message}>
                 <Input {...form.register('slug')} placeholder="red-a1" />
               </Field>
-              <Field label="Notes" error={form.formState.errors.notes?.message}>
+              <Field label="Заметки" error={form.formState.errors.notes?.message}>
                 <Textarea rows={4} {...form.register('notes')} />
               </Field>
-              <ToggleField label="QR is active" {...form.register('isActive')} checked={form.watch('isActive')} />
+              <ToggleField label="QR активен" {...form.register('isActive')} checked={form.watch('isActive')} />
               <Button type="submit" className="w-full" disabled={saveQr.isPending}>
-                {saveQr.isPending ? 'Saving...' : selected ? 'Update QR' : 'Create QR'}
+                {saveQr.isPending ? 'Сохранение...' : selected ? 'Сохранить QR' : 'Создать QR'}
               </Button>
             </form>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>QR Preview</CardTitle>
+            <CardTitle>Предпросмотр QR</CardTitle>
             <CardDescription>Client-side generated QR code pointing to the frontend browser route.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-center rounded-3xl border border-border bg-white p-6">
               <QRCodeSVG value={browserRoute} size={200} />
             </div>
-            <KeyValue label="Browser route" value={browserRoute} />
-            <KeyValue label="Print label" value={form.watch('label') || 'n/a'} />
+            <KeyValue label="Адрес для перехода" value={browserRoute} />
+            <KeyValue label="Подпись для печати" value={form.watch('label') || '—'} />
           </CardContent>
         </Card>
       </div>
@@ -1192,33 +1197,33 @@ export function AdminRoutingPage() {
   const saveProfile = useMutation({
     mutationFn: (values: RoutingFormValues) => (selected ? adminApi.updateRoutingProfile(selected.id, toRoutingPayload(values)) : adminApi.createRoutingProfile(toRoutingPayload(values))),
     onSuccess: async (result) => {
-      toast.success(selected ? 'Routing profile updated' : 'Routing profile created')
+      toast.success(selected ? 'Профиль маршрутизации обновлён' : 'Профиль маршрутизации создан')
       setSelectedId(result.id)
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingProfiles })
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingPreview })
     },
-    onError: (error) => handleMutationError(error, 'Failed to save routing profile'),
+    onError: (error) => handleMutationError(error, 'Не удалось сохранить профиль маршрутизации'),
   })
 
   const activateProfile = useMutation({
     mutationFn: (id: Id) => adminApi.activateRoutingProfile(id),
     onSuccess: async () => {
-      toast.success('Routing profile activated')
+      toast.success('Профиль маршрутизации активирован')
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingProfiles })
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingPreview })
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminSettings })
     },
-    onError: (error) => handleMutationError(error, 'Failed to activate routing profile'),
+    onError: (error) => handleMutationError(error, 'Не удалось активировать профиль маршрутизации'),
   })
 
   const rotateTag = useMutation({
     mutationFn: ({ tagId, step }: { tagId: Id; step: number }) => adminApi.rotateTag(tagId, step),
     onSuccess: async () => {
-      toast.success('Rotation offset updated')
+      toast.success('Смещение ротации обновлено')
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingPreview })
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingProfiles })
     },
-    onError: (error) => handleMutationError(error, 'Failed to rotate tag'),
+    onError: (error) => handleMutationError(error, 'Не удалось повернуть тег'),
   })
 
   const createOverride = useMutation({
@@ -1231,7 +1236,7 @@ export function AdminRoutingPage() {
         reason: normalizeOptional(values.reason),
       }),
     onSuccess: async (result) => {
-      toast.success('Override created')
+      toast.success('Переопределение создано')
       setLocalOverrides((current) => [result, ...current])
       overrideForm.reset({
         qrCodeId: '',
@@ -1242,30 +1247,30 @@ export function AdminRoutingPage() {
       })
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingPreview })
     },
-    onError: (error) => handleMutationError(error, 'Failed to create override'),
+    onError: (error) => handleMutationError(error, 'Не удалось создать переопределение'),
   })
 
   const clearOverride = useMutation({
     mutationFn: (id: Id) => adminApi.clearOverride(id),
     onSuccess: async (_, id) => {
-      toast.success('Override cleared')
+      toast.success('Переопределение сброшено')
       setLocalOverrides((current) => current.filter((item) => item.id !== id))
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingPreview })
     },
-    onError: (error) => handleMutationError(error, 'Failed to clear override'),
+    onError: (error) => handleMutationError(error, 'Не удалось сбросить переопределение'),
   })
 
   if ([tags, pools, qrCodes, questions, profiles, preview].some((item) => item.isPending)) {
-    return <LoadingScreen label="Loading routing..." />
+    return <LoadingScreen label="Загружаю маршрутизацию..." />
   }
 
   return (
     <section className="space-y-6">
-      <PageHeader title="Routing" description="Profiles, preview matrix, pool rotation and QR overrides." />
+      <PageHeader title="Маршрутизация" description="Профили, матрица превью, ротация пулов и переопределения QR." />
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-foreground">Profiles</h2>
+            <h2 className="text-lg font-semibold text-foreground">Профили</h2>
             <Button onClick={() => setSelectedId('new')}>Новый profile</Button>
           </div>
           <div className="space-y-3">
@@ -1288,20 +1293,20 @@ export function AdminRoutingPage() {
         </div>
         <Card>
           <CardHeader>
-            <CardTitle>{selected ? 'Edit routing profile' : 'Create routing profile'}</CardTitle>
+            <CardTitle>{selected ? 'Профиль маршрутизации' : 'Новый профиль'}</CardTitle>
             <CardDescription>Каждый tag получает свой active pool и rotation offset.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={form.handleSubmit((values) => saveProfile.mutate(values))}>
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Name" error={form.formState.errors.name?.message}>
+                <Field label="Название" error={form.formState.errors.name?.message}>
                   <Input {...form.register('name')} />
                 </Field>
-                <Field label="Description" error={form.formState.errors.description?.message}>
+                <Field label="Описание" error={form.formState.errors.description?.message}>
                   <Input {...form.register('description')} />
                 </Field>
               </div>
-              <ToggleField label="Profile is active" {...form.register('isActive')} checked={form.watch('isActive')} />
+              <ToggleField label="Профиль активен" {...form.register('isActive')} checked={form.watch('isActive')} />
               <Divider />
               <div className="space-y-3">
                 {tagStatesArray.fields.map((field, index) => {
@@ -1314,9 +1319,9 @@ export function AdminRoutingPage() {
                         <Badge>{form.watch(`tagStates.${index}.selectionMode`)}</Badge>
                       </div>
                       <div className="mt-4 grid gap-4 md:grid-cols-2">
-                        <Field label="Active pool">
+                        <Field label="Активный пул">
                           <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register(`tagStates.${index}.activePoolId`)}>
-                            <option value="">No active pool</option>
+                            <option value="">Нет активного пула</option>
                             {tagPools.map((pool) => (
                               <option key={pool.id} value={pool.id}>
                                 {pool.name}
@@ -1324,13 +1329,13 @@ export function AdminRoutingPage() {
                             ))}
                           </select>
                         </Field>
-                        <Field label="Rotation offset">
+                        <Field label="Смещение ротации">
                           <Input type="number" {...form.register(`tagStates.${index}.rotationOffset`)} />
                         </Field>
                       </div>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <ToggleField label="Tag state enabled" {...form.register(`tagStates.${index}.isEnabled`)} checked={form.watch(`tagStates.${index}.isEnabled`)} />
-                        <Field label="Selection mode">
+                        <ToggleField label="Состояние тега включено" {...form.register(`tagStates.${index}.isEnabled`)} checked={form.watch(`tagStates.${index}.isEnabled`)} />
+                        <Field label="Режим выбора">
                           <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register(`tagStates.${index}.selectionMode`)}>
                             <option value="PoolSlotRotation">PoolSlotRotation</option>
                           </select>
@@ -1341,7 +1346,7 @@ export function AdminRoutingPage() {
                 })}
               </div>
               <Button type="submit" className="w-full" disabled={saveProfile.isPending}>
-                {saveProfile.isPending ? 'Saving...' : selected ? 'Update profile' : 'Create profile'}
+                {saveProfile.isPending ? 'Сохранение...' : selected ? 'Сохранить профиль' : 'Создать профиль'}
               </Button>
             </form>
           </CardContent>
@@ -1351,7 +1356,7 @@ export function AdminRoutingPage() {
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Routing Preview</CardTitle>
+            <CardTitle>Предпросмотр маршрутизации</CardTitle>
             <CardDescription>`GET /api/admin/routing/preview` is the main operational screen to verify live QR resolution.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -1360,10 +1365,10 @@ export function AdminRoutingPage() {
                 <thead className="bg-muted/50 text-left text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3">QR</th>
-                    <th className="px-4 py-3">Slug</th>
-                    <th className="px-4 py-3">Tag</th>
-                    <th className="px-4 py-3">Question</th>
-                    <th className="px-4 py-3">Resolution</th>
+                    <th className="px-4 py-3">Слаг</th>
+                    <th className="px-4 py-3">Тег</th>
+                    <th className="px-4 py-3">Вопрос</th>
+                    <th className="px-4 py-3">Решение</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -1406,14 +1411,14 @@ export function AdminRoutingPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>QR Override</CardTitle>
-            <CardDescription>Backend currently does not expose a GET endpoint for all overrides, so only overrides created in this session are directly removable from UI.</CardDescription>
+            <CardTitle>Переопределение QR</CardTitle>
+            <CardDescription>Удалить из списка можно только переопределения, созданные в этой сессии.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <form className="space-y-4" onSubmit={overrideForm.handleSubmit((values) => createOverride.mutate(values))}>
-              <Field label="QR code">
+              <Field label="QR-код">
                 <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...overrideForm.register('qrCodeId')}>
-                  <option value="">Select QR</option>
+                  <option value="">Выберите QR</option>
                   {qrCodes.data?.map((qrCode) => (
                     <option key={qrCode.id} value={qrCode.id}>
                       {qrCode.label} ({qrCode.slug})
@@ -1421,9 +1426,9 @@ export function AdminRoutingPage() {
                   ))}
                 </select>
               </Field>
-              <Field label="Question">
+              <Field label="Вопрос">
                 <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...overrideForm.register('questionId')}>
-                  <option value="">Select question</option>
+                  <option value="">Выберите вопрос</option>
                   {questions.data?.map((question) => (
                     <option key={question.id} value={question.id}>
                       {question.title}
@@ -1431,9 +1436,9 @@ export function AdminRoutingPage() {
                   ))}
                 </select>
               </Field>
-              <Field label="Scope profile">
+              <Field label="Профиль области">
                 <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...overrideForm.register('scopeProfileId')}>
-                  <option value="">Global override</option>
+                  <option value="">Глобальное переопределение</option>
                   {profiles.data?.map((profile) => (
                     <option key={profile.id} value={profile.id}>
                       {profile.name}
@@ -1441,12 +1446,12 @@ export function AdminRoutingPage() {
                   ))}
                 </select>
               </Field>
-              <Field label="Reason">
+              <Field label="Причина">
                 <Textarea rows={3} {...overrideForm.register('reason')} />
               </Field>
-              <ToggleField label="Override is active" {...overrideForm.register('isActive')} checked={overrideForm.watch('isActive')} />
+              <ToggleField label="Переопределение активно" {...overrideForm.register('isActive')} checked={overrideForm.watch('isActive')} />
               <Button type="submit" className="w-full" disabled={createOverride.isPending}>
-                {createOverride.isPending ? 'Creating...' : 'Create override'}
+                {createOverride.isPending ? 'Создание...' : 'Создать переопределение'}
               </Button>
             </form>
             <Divider />
@@ -1457,7 +1462,7 @@ export function AdminRoutingPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="space-y-1">
                         <p className="font-medium text-foreground">Override {override.id}</p>
-                        <p className="text-xs text-muted-foreground">{override.reason || 'No reason'}</p>
+                        <p className="text-xs text-muted-foreground">{override.reason || 'Причина не указана'}</p>
                       </div>
                       <Button variant="danger" size="sm" onClick={() => clearOverride.mutate(override.id)}>
                         Clear
@@ -1466,7 +1471,7 @@ export function AdminRoutingPage() {
                   </div>
                 ))
               ) : (
-                <EmptyState title="No session overrides" description="Create an override to see it listed here and get a direct clear action." />
+                <EmptyState title="Нет переопределений" description="Создайте переопределение — оно появится в списке." />
               )}
             </div>
           </CardContent>
@@ -1495,31 +1500,31 @@ export function AdminEnigmaPage() {
   const saveProfile = useMutation({
     mutationFn: (values: EnigmaFormValues) => (selected ? adminApi.updateEnigmaProfile(selected.id, toEnigmaPayload(values)) : adminApi.createEnigmaProfile(toEnigmaPayload(values))),
     onSuccess: async (result) => {
-      toast.success(selected ? 'Enigma profile updated' : 'Enigma profile created')
+      toast.success(selected ? 'Профиль Enigma обновлён' : 'Профиль Enigma создан')
       setSelectedId(result.id)
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminEnigmaProfiles })
     },
-    onError: (error) => handleMutationError(error, 'Failed to save enigma profile'),
+    onError: (error) => handleMutationError(error, 'Не удалось сохранить профиль Enigma'),
   })
 
   const activateProfile = useMutation({
     mutationFn: (id: Id) => adminApi.activateEnigmaProfile(id),
     onSuccess: async () => {
-      toast.success('Enigma profile activated')
+      toast.success('Профиль Enigma активирован')
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminEnigmaProfiles })
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminSettings })
     },
-    onError: (error) => handleMutationError(error, 'Failed to activate enigma profile'),
+    onError: (error) => handleMutationError(error, 'Не удалось активировать профиль Enigma'),
   })
 
   if (tags.isPending || profiles.isPending) {
-    return <LoadingScreen label="Loading Enigma profiles..." />
+    return <LoadingScreen label="Загружаю профили Enigma..." />
   }
 
   return (
     <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="space-y-4">
-        <PageHeader title="Enigma Profiles" description="Configures Variant B player experience and secret combinations." actions={<Button onClick={() => setSelectedId('new')}>Новый profile</Button>} />
+        <PageHeader title="Профили Enigma" description="Режим игрока и секретные комбинации." actions={<Button onClick={() => setSelectedId('new')}>Новый профиль</Button>} />
         <div className="space-y-3">
           {profiles.data?.map((profile) => (
             <AdminListCard
@@ -1540,35 +1545,35 @@ export function AdminEnigmaPage() {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>{selected ? 'Edit enigma profile' : 'Create enigma profile'}</CardTitle>
-          <CardDescription>Each rotor is linked to a tag and gets a secret position entry by `tagId`.</CardDescription>
+          <CardTitle>{selected ? 'Профиль Enigma' : 'Новый профиль Enigma'}</CardTitle>
+          <CardDescription>Каждый ротор привязан к тегу и имеет секретную позицию.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => saveProfile.mutate(values))}>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Name">
+              <Field label="Название">
                 <Input {...form.register('name')} />
               </Field>
-              <Field label="Mode">
+              <Field label="Режим">
                 <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('mode')}>
-                  <option value="SimpleCombination">SimpleCombination</option>
-                  <option value="HistoricalLike">HistoricalLike</option>
+                  <option value="SimpleCombination">Простая комбинация</option>
+                  <option value="HistoricalLike">Исторический</option>
                 </select>
               </Field>
-              <Field label="Cooldown minutes">
+              <Field label="Кулдаун (минуты)">
                 <Input type="number" {...form.register('attemptCooldownMinutes')} />
               </Field>
-              <ToggleField label="Profile is active" {...form.register('isActive')} checked={form.watch('isActive')} />
+              <ToggleField label="Профиль активен" {...form.register('isActive')} checked={form.watch('isActive')} />
             </div>
-            <Field label="Success message">
+            <Field label="Сообщение при успехе">
               <Textarea rows={3} {...form.register('successMessage')} />
             </Field>
-            <Field label="Failure message">
+            <Field label="Сообщение при неудаче">
               <Textarea rows={3} {...form.register('failureMessage')} />
             </Field>
             <Divider />
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-foreground">Rotors</h3>
+              <h3 className="font-semibold text-foreground">Роторы</h3>
               <Button
                 type="button"
                 variant="outline"
@@ -1585,19 +1590,19 @@ export function AdminEnigmaPage() {
                   })
                 }
               >
-                Add rotor
+                Добавить ротор
               </Button>
             </div>
             {rotorsArray.fields.length === 0 ? (
-              <EmptyState title="No rotors yet" description="Add rotors to define the player Enigma screen." />
+              <EmptyState title="Роторов пока нет" description="Добавьте роторы для экрана Enigma у участников." />
             ) : (
               <div className="space-y-3">
                 {rotorsArray.fields.map((field, index) => (
                   <div key={field.id} className="rounded-3xl border border-border bg-background/70 p-4">
                     <div className="grid gap-4 md:grid-cols-2">
-                      <Field label="Tag">
+                      <Field label="Тег">
                         <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register(`rotors.${index}.tagId`)}>
-                          <option value="">Select tag</option>
+                          <option value="">Выберите тег</option>
                           {tags.data?.map((tag) => (
                             <option key={tag.id} value={tag.id}>
                               {tag.name}
@@ -1605,25 +1610,25 @@ export function AdminEnigmaPage() {
                           ))}
                         </select>
                       </Field>
-                      <Field label="Label">
+                      <Field label="Подпись">
                         <Input {...form.register(`rotors.${index}.label`)} />
                       </Field>
-                      <Field label="Color override">
+                      <Field label="Переопределение цвета">
                         <Input {...form.register(`rotors.${index}.colorOverride`)} placeholder="#22c55e" />
                       </Field>
-                      <Field label="Display order">
+                      <Field label="Порядок отображения">
                         <Input type="number" {...form.register(`rotors.${index}.displayOrder`)} />
                       </Field>
-                      <Field label="Position min">
+                      <Field label="Позиция мин">
                         <Input type="number" {...form.register(`rotors.${index}.positionMin`)} />
                       </Field>
-                      <Field label="Position max">
+                      <Field label="Позиция макс">
                         <Input type="number" {...form.register(`rotors.${index}.positionMax`)} />
                       </Field>
-                      <Field label="Secret position">
+                      <Field label="Секретная позиция">
                         <Input type="number" {...form.register(`rotors.${index}.secretPosition`)} />
                       </Field>
-                      <ToggleField label="Rotor is active" {...form.register(`rotors.${index}.isActive`)} checked={form.watch(`rotors.${index}.isActive`)} />
+                      <ToggleField label="Ротор активен" {...form.register(`rotors.${index}.isActive`)} checked={form.watch(`rotors.${index}.isActive`)} />
                     </div>
                     <div className="mt-3">
                       <Button type="button" variant="danger" onClick={() => rotorsArray.remove(index)}>
@@ -1635,7 +1640,7 @@ export function AdminEnigmaPage() {
               </div>
             )}
             <Button type="submit" className="w-full" disabled={saveProfile.isPending}>
-              {saveProfile.isPending ? 'Saving...' : selected ? 'Update profile' : 'Create profile'}
+              {saveProfile.isPending ? 'Сохранение...' : selected ? 'Сохранить профиль' : 'Создать профиль'}
             </Button>
           </form>
         </CardContent>
@@ -1666,75 +1671,77 @@ export function AdminQuestDayPage() {
   const updateMessages = useMutation({
     mutationFn: (values: QuestDayMessagesFormValues) => adminApi.updateQuestDayMessages(values),
     onSuccess: async () => {
-      toast.success('Quest day messages updated')
+      toast.success('Сообщения игрового дня обновлены')
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminQuestDay })
       await queryClient.invalidateQueries({ queryKey: queryKeys.questDayPublic })
     },
-    onError: (error) => handleMutationError(error, 'Failed to update quest day messages'),
+    onError: (error) => handleMutationError(error, 'Не удалось обновить сообщения игрового дня'),
   })
 
   const startQuest = useMutation({
     mutationFn: adminApi.startQuestDay,
     onSuccess: async () => {
-      toast.success('Quest started')
+      toast.success('Квест начат')
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminQuestDay })
       await queryClient.invalidateQueries({ queryKey: queryKeys.questDayPublic })
     },
-    onError: (error) => handleMutationError(error, 'Failed to start quest'),
+    onError: (error) => handleMutationError(error, 'Не удалось начать квест'),
   })
 
   const finishQuest = useMutation({
     mutationFn: adminApi.finishQuestDay,
     onSuccess: async () => {
-      toast.success('Quest day finished')
+      toast.success('Игровой день завершён')
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminQuestDay })
       await queryClient.invalidateQueries({ queryKey: queryKeys.questDayPublic })
     },
-    onError: (error) => handleMutationError(error, 'Failed to finish quest day'),
+    onError: (error) => handleMutationError(error, 'Не удалось завершить игровой день'),
   })
 
   if (questDay.isPending) {
-    return <LoadingScreen label="Loading quest day..." />
+    return <LoadingScreen label="Загружаю состояние дня..." />
   }
 
   return (
     <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
       <div className="space-y-4">
-        <PageHeader title="Quest Day Lifecycle" description="Server-side buttons block scans, answers and Enigma attempts immediately." />
+        <PageHeader title="Игровой день" description="Кнопки на сервере сразу блокируют сканирования, ответы и попытки Enigma." />
         <Card>
           <CardHeader>
-            <CardTitle>Current state</CardTitle>
-            <CardDescription>Start/finish actions are intentionally explicit and dangerous.</CardDescription>
+            <CardTitle>Текущее состояние</CardTitle>
+            <CardDescription>Запуск и завершение дня — ответственные действия.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2">
-              <Badge tone={questDay.data?.status === 'Running' ? 'success' : 'warning'}>{questDay.data?.status}</Badge>
-              {questDay.data?.startedAt ? <Badge>Started: {formatDateTime(questDay.data.startedAt)}</Badge> : null}
-              {questDay.data?.endedAt ? <Badge>Ended: {formatDateTime(questDay.data.endedAt)}</Badge> : null}
+              <Badge tone={questDay.data?.status === 'Running' ? 'success' : 'warning'}>
+                {questDay.data?.status ? questDayStatusLabel(questDay.data.status) : '—'}
+              </Badge>
+              {questDay.data?.startedAt ? <Badge>Старт: {formatDateTime(questDay.data.startedAt)}</Badge> : null}
+              {questDay.data?.endedAt ? <Badge>Конец: {formatDateTime(questDay.data.endedAt)}</Badge> : null}
             </div>
-            <AlertBox tone="info" title="Active message" description={questDay.data?.message ?? 'n/a'} />
+            <AlertBox tone="info" title="Сообщение для участников" description={questDay.data?.message ?? '—'} />
             <div className="grid gap-3 md:grid-cols-2">
               <Button
                 variant="default"
                 onClick={() => {
-                  if (window.confirm('Start quest now?')) {
+                  if (window.confirm('Запустить квест сейчас?')) {
                     startQuest.mutate()
                   }
                 }}
               >
                 <Play className="h-4 w-4" />
-                Start quest
+                Запустить квест
               </Button>
               <Button
                 variant="danger"
                 onClick={() => {
-                  if (window.confirm('Finish quest for the day?')) {
+                  if (window.confirm('Завершить игровой день?')) {
                     finishQuest.mutate()
                   }
                 }}
               >
                 <StopCircle className="h-4 w-4" />
-                Finish day
+                Завершить день
               </Button>
             </div>
           </CardContent>
@@ -1742,19 +1749,19 @@ export function AdminQuestDayPage() {
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Lifecycle messages</CardTitle>
-          <CardDescription>Backend response does not currently expose both stored messages directly, so this form is the authoritative editor.</CardDescription>
+          <CardTitle>Сообщения для участников</CardTitle>
+          <CardDescription>Тексты до старта и после закрытия дня.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => updateMessages.mutate(values))}>
-            <Field label="Pre-start message">
+            <Field label="Сообщение до старта">
               <Textarea rows={5} {...form.register('preStartMessage')} />
             </Field>
-            <Field label="Day-closed message">
+            <Field label="Сообщение после закрытия">
               <Textarea rows={5} {...form.register('dayClosedMessage')} />
             </Field>
             <Button type="submit" className="w-full" disabled={updateMessages.isPending}>
-              {updateMessages.isPending ? 'Saving...' : 'Update messages'}
+              {updateMessages.isPending ? 'Сохранение...' : 'Сохранить сообщения'}
             </Button>
           </form>
         </CardContent>
@@ -1790,50 +1797,50 @@ export function AdminSettingsPage() {
         timezone: values.timezone,
       }),
     onSuccess: async () => {
-      toast.success('Global settings updated')
+      toast.success('Глобальные настройки обновлены')
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminSettings })
     },
-    onError: (error) => handleMutationError(error, 'Failed to update settings'),
+    onError: (error) => handleMutationError(error, 'Не удалось обновить настройки'),
   })
 
   if (settings.isPending || routingProfiles.isPending || enigmaProfiles.isPending) {
-    return <LoadingScreen label="Loading global settings..." />
+    return <LoadingScreen label="Загружаю настройки..." />
   }
 
   return (
     <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="space-y-4">
-        <PageHeader title="Global Settings" description="JSON strings are stored as raw strings in backend, so the UI edits them as text areas." />
+        <PageHeader title="Глобальные настройки" description="JSON хранится как текст — редактируется в полях ниже." />
         <Card>
           <CardHeader>
-            <CardTitle>Current references</CardTitle>
-            <CardDescription>These identifiers point backend to live configuration objects.</CardDescription>
+            <CardTitle>Текущие ссылки</CardTitle>
+            <CardDescription>Эти идентификаторы указывают бэкенду на активные объекты конфигурации.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
-            <KeyValue label="Settings id" value={settings.data?.id ?? 'n/a'} />
-            <KeyValue label="Current routing profile" value={settings.data?.currentRoutingProfileId ?? 'n/a'} />
-            <KeyValue label="Current enigma profile" value={settings.data?.currentEnigmaProfileId ?? 'n/a'} />
-            <KeyValue label="Current quest day state" value={settings.data?.currentQuestDayStateId ?? 'n/a'} />
+            <KeyValue label="ID настроек" value={settings.data?.id ?? '—'} />
+            <KeyValue label="Текущий профиль маршрутизации" value={settings.data?.currentRoutingProfileId ?? '—'} />
+            <KeyValue label="Текущий профиль Enigma" value={settings.data?.currentEnigmaProfileId ?? '—'} />
+            <KeyValue label="Текущее состояние игрового дня" value={settings.data?.currentQuestDayStateId ?? '—'} />
           </CardContent>
         </Card>
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Edit settings</CardTitle>
+          <CardTitle>Редактирование настроек</CardTitle>
           <CardDescription>Client-side validation only checks that values exist; semantic JSON correctness should still be reviewed carefully.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => saveSettings.mutate(values))}>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Answer cooldown minutes">
+              <Field label="Кулдаун ответов (минуты)">
                 <Input type="number" {...form.register('answerCooldownMinutes')} />
               </Field>
-              <Field label="Enigma cooldown minutes">
+              <Field label="Кулдаун Enigma (минуты)">
                 <Input type="number" {...form.register('enigmaCooldownMinutes')} />
               </Field>
-              <Field label="Routing profile">
+              <Field label="Профиль маршрутизации">
                 <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('currentRoutingProfileId')}>
-                  <option value="">Unspecified</option>
+                  <option value="">Не указано</option>
                   {routingProfiles.data?.map((profile) => (
                     <option key={profile.id} value={profile.id}>
                       {profile.name}
@@ -1841,9 +1848,9 @@ export function AdminSettingsPage() {
                   ))}
                 </select>
               </Field>
-              <Field label="Enigma profile">
+              <Field label="Профиль Enigma">
                 <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('currentEnigmaProfileId')}>
-                  <option value="">Unspecified</option>
+                  <option value="">Не указано</option>
                   {enigmaProfiles.data?.map((profile) => (
                     <option key={profile.id} value={profile.id}>
                       {profile.name}
@@ -1852,20 +1859,20 @@ export function AdminSettingsPage() {
                 </select>
               </Field>
             </div>
-            <Field label="Current quest day state id">
+            <Field label="ID состояния игрового дня">
               <Input {...form.register('currentQuestDayStateId')} />
             </Field>
-            <Field label="Timezone">
+            <Field label="Часовой пояс">
               <Input {...form.register('timezone')} />
             </Field>
-            <Field label="Default answer normalization">
+            <Field label="Нормализация ответов по умолчанию">
               <Textarea rows={6} {...form.register('defaultAnswerNormalization')} />
             </Field>
-            <Field label="Flags JSON">
+            <Field label="Флаги (JSON)">
               <Textarea rows={6} {...form.register('flagsJson')} />
             </Field>
             <Button type="submit" className="w-full" disabled={saveSettings.isPending}>
-              {saveSettings.isPending ? 'Saving...' : 'Update settings'}
+              {saveSettings.isPending ? 'Сохранение...' : 'Сохранить настройки'}
             </Button>
           </form>
         </CardContent>
@@ -1879,7 +1886,7 @@ export function AdminSupportTeamsPage() {
   const [search, setSearch] = useState('')
 
   if (teams.isPending) {
-    return <LoadingScreen label="Loading support teams..." />
+    return <LoadingScreen label="Загружаю команды..." />
   }
 
   const filtered = (teams.data ?? []).filter((team) =>
@@ -1888,23 +1895,23 @@ export function AdminSupportTeamsPage() {
 
   return (
     <section className="space-y-6">
-      <PageHeader title="Support Teams" description="Operational console for manual unlock/solve/revoke actions." />
-      <SearchField value={search} onChange={setSearch} placeholder="Filter teams..." />
+      <PageHeader title="Команды" description="Ручные операции: открыть вопрос, отметить решённым, отозвать награду." />
+      <SearchField value={search} onChange={setSearch} placeholder="Поиск команд..." />
       <div className="grid gap-4 lg:grid-cols-2">
         {filtered.map((team) => (
           <Card key={team.id}>
             <CardHeader>
               <CardTitle>{team.name}</CardTitle>
-              <CardDescription>{team.members.length} participants</CardDescription>
+              <CardDescription>Участников: {team.members.length}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
                 <Badge>{team.status}</Badge>
-                {team.isLocked ? <Badge tone="warning">Locked</Badge> : null}
-                {team.isDisqualified ? <Badge tone="danger">Disqualified</Badge> : null}
+                {team.isLocked ? <Badge tone="warning">Заблокирована</Badge> : null}
+                {team.isDisqualified ? <Badge tone="danger">Дисквалифицирована</Badge> : null}
               </div>
               <Button asChild className="w-full">
-                <Link to={`/admin/support/teams/${team.id}`}>Open support details</Link>
+                <Link to={`/admin/support/teams/${team.id}`}>Открыть команду</Link>
               </Button>
             </CardContent>
           </Card>
@@ -1938,18 +1945,18 @@ export function AdminSupportTeamDetailsPage() {
         rewardType: values.rewardType,
       }),
     onSuccess: async () => {
-      toast.success('Reward adjusted')
+      toast.success('Награда скорректирована')
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminSupportTeam(teamId) })
     },
-    onError: (error) => handleMutationError(error, 'Failed to adjust reward'),
+    onError: (error) => handleMutationError(error, 'Не удалось скорректировать награду'),
   })
 
   if (details.isPending || tags.isPending) {
-    return <LoadingScreen label="Loading team support details..." />
+    return <LoadingScreen label="Загружаю данные команды..." />
   }
 
   if (!details.data) {
-    return <EmptyState title="Team not found" description="The backend did not return support details for this team." />
+    return <EmptyState title="Команда не найдена" description="Сервер не вернул данные по этой команде." />
   }
 
   const runQuestionAction = async (questionId: Id, action: 'unlock' | 'solve' | 'revoke-reward') => {
@@ -1970,7 +1977,7 @@ export function AdminSupportTeamDetailsPage() {
       await adminApi.revokeReward(teamId, questionId, { reason })
     }
 
-    toast.success(`Action ${action} completed`)
+    toast.success('Действие выполнено')
     await queryClient.invalidateQueries({ queryKey: queryKeys.adminSupportTeam(teamId) })
   }
 
@@ -1981,26 +1988,26 @@ export function AdminSupportTeamDetailsPage() {
     }
 
     await adminApi.removeMember(teamId, membershipId, { reason })
-    toast.success('Member removed')
+    toast.success('Участник удалён')
     await queryClient.invalidateQueries({ queryKey: queryKeys.adminSupportTeam(teamId) })
   }
 
   return (
     <section className="space-y-6">
-      <PageHeader title={`Support: ${details.data.team.name}`} description="Dangerous operational actions always require explicit confirmation." />
+      <PageHeader title={`Команда: ${details.data.team.name}`} description="Опасные действия требуют подтверждения." />
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Team state</CardTitle>
-              <CardDescription>Current membership and flags.</CardDescription>
+              <CardTitle>Состояние команды</CardTitle>
+              <CardDescription>Состав и флаги.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-2">
                 <Badge>{details.data.team.status}</Badge>
-                {details.data.team.isLocked ? <Badge tone="warning">Locked</Badge> : null}
-                {details.data.team.isDisqualified ? <Badge tone="danger">Disqualified</Badge> : null}
-                {details.data.team.isHidden ? <Badge tone="info">Hidden</Badge> : null}
+                {details.data.team.isLocked ? <Badge tone="warning">Заблокирована</Badge> : null}
+                {details.data.team.isDisqualified ? <Badge tone="danger">Дисквалифицирована</Badge> : null}
+                {details.data.team.isHidden ? <Badge tone="info">Скрыта</Badge> : null}
               </div>
               <div className="space-y-3">
                 {details.data.team.members.map((member) => (
@@ -2008,10 +2015,10 @@ export function AdminSupportTeamDetailsPage() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="font-medium text-foreground">{member.displayName}</p>
-                        <p className="text-xs text-muted-foreground">Joined {formatShortDateTime(member.joinedAt)}</p>
+                        <p className="text-xs text-muted-foreground">Вступил {formatShortDateTime(member.joinedAt)}</p>
                       </div>
                       <Button variant="danger" size="sm" onClick={() => removeMember(member.membershipId)}>
-                        Remove
+                        Удалить
                       </Button>
                     </div>
                   </div>
@@ -2021,14 +2028,14 @@ export function AdminSupportTeamDetailsPage() {
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Reward adjust</CardTitle>
-              <CardDescription>Manual reward grant/revoke per tag.</CardDescription>
+              <CardTitle>Корректировка наград</CardTitle>
+              <CardDescription>Выдача или отзыв награды по тегу.</CardDescription>
             </CardHeader>
             <CardContent>
               <form className="space-y-4" onSubmit={rewardForm.handleSubmit((values) => adjustReward.mutate(values))}>
-                <Field label="Tag">
+                <Field label="Тег">
                   <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...rewardForm.register('tagId')}>
-                    <option value="">Select tag</option>
+                    <option value="">Выберите тег</option>
                     {tags.data?.map((tag) => (
                       <option key={tag.id} value={tag.id}>
                         {tag.name}
@@ -2036,9 +2043,9 @@ export function AdminSupportTeamDetailsPage() {
                     ))}
                   </select>
                 </Field>
-                <Field label="Source question id">
+                <Field label="ID вопроса-источника">
                   <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...rewardForm.register('sourceQuestionId')}>
-                    <option value="">Optional source question</option>
+                    <option value="">Опциональный вопрос-источник</option>
                     {details.data.questions.map((question) => (
                       <option key={question.id} value={question.id}>
                         {question.title}
@@ -2046,10 +2053,10 @@ export function AdminSupportTeamDetailsPage() {
                     ))}
                   </select>
                 </Field>
-                <Field label="Reward type">
+                <Field label="Тип награды">
                   <Input {...rewardForm.register('rewardType')} />
                 </Field>
-                <ToggleField label="Revoke reward instead of grant" {...rewardForm.register('revoke')} checked={rewardForm.watch('revoke')} />
+                <ToggleField label="Отозвать награду (а не выдать)" {...rewardForm.register('revoke')} checked={rewardForm.watch('revoke')} />
                 <Button type="submit" className="w-full" disabled={adjustReward.isPending}>
                   {adjustReward.isPending ? 'Applying...' : 'Apply reward adjustment'}
                 </Button>
@@ -2061,8 +2068,8 @@ export function AdminSupportTeamDetailsPage() {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Unlocked questions</CardTitle>
-              <CardDescription>Support actions for individual team questions.</CardDescription>
+              <CardTitle>Открытые вопросы</CardTitle>
+              <CardDescription>Действия по вопросам команды.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {details.data.questions.map((question) => (
@@ -2072,30 +2079,30 @@ export function AdminSupportTeamDetailsPage() {
                       <p className="font-semibold text-foreground">{question.title}</p>
                       <div className="flex flex-wrap gap-2">
                         <TagChip name={question.tagName} color={question.tagColor} />
-                        <Badge tone={question.isSolved ? 'success' : 'info'}>{question.isSolved ? 'Solved' : 'Open'}</Badge>
+                        <Badge tone={question.isSolved ? 'success' : 'info'}>{question.isSolved ? 'Решён' : 'Открыт'}</Badge>
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" size="sm" onClick={() => runQuestionAction(question.id, 'unlock')}>
-                        Unlock
+                        Открыть
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => runQuestionAction(question.id, 'solve')}>
-                        Solve
+                        Решён
                       </Button>
                       <Button variant="danger" size="sm" onClick={() => runQuestionAction(question.id, 'revoke-reward')}>
-                        Revoke reward
+                        Отозвать награду
                       </Button>
                     </div>
                   </div>
-                  <p className="mt-3 text-xs text-muted-foreground">Unlocked {formatDateTime(question.firstUnlockedAt)}</p>
+                  <p className="mt-3 text-xs text-muted-foreground">Открыт {formatDateTime(question.firstUnlockedAt)}</p>
                 </div>
               ))}
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Team audit trail</CardTitle>
-              <CardDescription>Latest audit entries already filtered by support service for this team context.</CardDescription>
+              <CardTitle>Журнал по команде</CardTitle>
+              <CardDescription>Последние записи аудита для этой команды.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               {details.data.auditTrail.map((entry) => (
@@ -2126,7 +2133,7 @@ export function AdminAuditPage() {
   const audit = useQuery({ queryKey: queryKeys.adminAudit(take), queryFn: () => adminApi.audit(take) })
 
   if (audit.isPending) {
-    return <LoadingScreen label="Loading audit log..." />
+    return <LoadingScreen label="Загружаю аудит..." />
   }
 
   const filtered = (audit.data ?? []).filter((entry) =>
@@ -2135,12 +2142,12 @@ export function AdminAuditPage() {
 
   return (
     <section className="space-y-6">
-      <PageHeader title="Audit Explorer" description="Review config changes, support actions and lifecycle operations." />
+      <PageHeader title="Аудит" description="Изменения конфигурации, операции поддержки и жизненный цикл." />
       <div className="grid gap-4 md:grid-cols-[220px_minmax(0,1fr)]">
-        <Field label="Take">
+        <Field label="Записей">
           <Input type="number" value={take} onChange={(event) => setTake(Number(event.target.value || 0))} />
         </Field>
-        <SearchField value={search} onChange={setSearch} placeholder="Filter audit entries..." />
+        <SearchField value={search} onChange={setSearch} placeholder="Фильтр записей..." />
       </div>
       <div className="space-y-4">
         {filtered.map((entry) => (
@@ -2160,7 +2167,7 @@ export function AdminAuditPage() {
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
-              {entry.reason ? <AlertBox tone="info" title="Reason" description={entry.reason} /> : null}
+              {entry.reason ? <AlertBox tone="info" title="Причина" description={entry.reason} /> : null}
               <JsonBlock value={entry.diffJson} />
             </CardContent>
           </Card>
@@ -2188,16 +2195,17 @@ export function AdminIdentityCard() {
         </div>
         <Button
           variant="outline"
-          onClick={() =>
-            logout.mutate(undefined, {
-              onSuccess: () => {
-                toast.success('Admin logged out')
-                navigate('/admin/login')
-              },
-            })
-          }
+          onClick={async () => {
+            try {
+              await logout.mutateAsync()
+              toast.success('Вы вышли из админки')
+              navigate('/', { replace: true })
+            } catch {
+              toast.error('Не удалось выйти')
+            }
+          }}
         >
-          Logout
+          Выйти
         </Button>
       </CardContent>
     </Card>

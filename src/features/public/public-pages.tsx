@@ -14,6 +14,7 @@ import { describeQrState } from '@/features/public/qr-state'
 import { SessionRoleNotice } from '@/features/session/session'
 import { useAdminSession, useParticipantSession } from '@/features/session/session-hooks'
 import { AlertBox, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, EmptyState, Input, LoadingScreen, PageHeader, RichText } from '@/shared/ui/ui'
+import { questDayStatusLabel } from '@/shared/utils/quest-day'
 import { formatDateTime } from '@/shared/utils/time'
 
 const playerLoginSchema = z.object({
@@ -58,7 +59,7 @@ function QuestDayStatusCard() {
       <AlertBox
         tone="danger"
         title="Не удалось загрузить статус квеста"
-        description="Проверьте, что QuestBackend запущен на ожидаемом адресе и прокси настроен корректно."
+        description="Обновите страницу или попробуйте позже."
       />
     )
   }
@@ -69,13 +70,13 @@ function QuestDayStatusCard() {
     <Card className="bg-gradient-to-br from-card to-card/60">
       <CardHeader>
         <CardTitle>Статус игрового дня</CardTitle>
-        <CardDescription>Backend управляет lifecycle и блокирует QR, ответы и Enigma attempts на сервере.</CardDescription>
+        <CardDescription>Текущий этап квеста и сообщение для участников.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-3">
-          <Badge tone={tone}>{questDay.data.status}</Badge>
-          {questDay.data.startedAt ? <Badge>Started: {formatDateTime(questDay.data.startedAt)}</Badge> : null}
-          {questDay.data.endedAt ? <Badge>Ended: {formatDateTime(questDay.data.endedAt)}</Badge> : null}
+          <Badge tone={tone}>{questDayStatusLabel(questDay.data.status)}</Badge>
+          {questDay.data.startedAt ? <Badge>Старт: {formatDateTime(questDay.data.startedAt)}</Badge> : null}
+          {questDay.data.endedAt ? <Badge>Конец: {formatDateTime(questDay.data.endedAt)}</Badge> : null}
         </div>
         <p className="text-sm text-muted-foreground">{questDay.data.message}</p>
       </CardContent>
@@ -88,50 +89,32 @@ export function LandingPage() {
     <MotionSection>
       <PageHeader
         title="Quest Enigma"
-        description="Один React SPA для public, player и admin зон. Player UI минималистичный и живой, admin UI строгий и операционный."
+        description="Участникам: войти, собрать команду, сканировать QR и решать задания. Статус игрового дня — по кнопке ниже."
         actions={<Button asChild><Link to="/quest-status">Статус дня</Link></Button>}
       />
 
       <SessionRoleNotice />
 
-      <div className="grid gap-4 lg:grid-cols-[1.3fr_1fr]">
-        <Card className="bg-gradient-to-br from-primary/10 via-card to-info/10">
-          <CardHeader>
-            <CardTitle>Как это работает</CardTitle>
-            <CardDescription>
-              QR-коды открывают вопросы, вопросы дают ротора, а затем команда пытается расшифровать финальное сообщение через Enigma.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3 md:grid-cols-3">
-            <InfoCard title="1. Войти" description="Сейчас доступен dev participant login и локальный admin login." icon={<UserRound className="h-5 w-5" />} />
-            <InfoCard title="2. Собрать команду" description="Создать новую команду или вступить по join secret." icon={<UsersRound className="h-5 w-5" />} />
-            <InfoCard title="3. Играть" description="Сканировать QR, решать вопросы и пробовать Enigma с cooldown." icon={<Sparkles className="h-5 w-5" />} />
-          </CardContent>
-        </Card>
+      <Card className="bg-gradient-to-br from-primary/10 via-card to-info/10">
+        <CardHeader>
+          <CardTitle>Как это работает</CardTitle>
+          <CardDescription>
+            QR-коды открывают вопросы, за правильные ответы команда получает награды для механики Enigma. В конце — расшифровка финального сообщения.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3 sm:grid-cols-3">
+          <InfoCard title="1. Войти" description="Вход участника (сейчас через dev login)." icon={<UserRound className="h-5 w-5" />} />
+          <InfoCard title="2. Команда" description="Создать команду или вступить по секретному слову." icon={<UsersRound className="h-5 w-5" />} />
+          <InfoCard title="3. Играть" description="Сканировать QR, отвечать на вопросы, пробовать Enigma с кулдауном." icon={<Sparkles className="h-5 w-5" />} />
+        </CardContent>
+      </Card>
 
-        <QuestDayStatusCard />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <RoleCard
-          title="Player Entry"
-          description="Dev login участника, команды, вопросы, QR flow и экран Enigma."
-          href="/player/login"
-          buttonLabel="Открыть player login"
-        />
-        <RoleCard
-          title="Admin Panel"
-          description="Теги, вопросы, пулы, routing, Enigma profiles, lifecycle, support и audit."
-          href="/admin/login"
-          buttonLabel="Открыть admin login"
-        />
-        <RoleCard
-          title="QR Browser Route"
-          description="Frontend владеет `/q/:slug`, а QR resolution JSON приходит из backend API `/api/public/qr/:slug`."
-          href="/q/demo"
-          buttonLabel="Проверить QR route"
-        />
-      </div>
+      <RoleCard
+        title="Участникам"
+        description="Вход, команда, список вопросов и экран Enigma."
+        href="/player/login"
+        buttonLabel="Войти и играть"
+      />
     </MotionSection>
   )
 }
@@ -229,23 +212,23 @@ export function PlayerLoginPage() {
 
   return (
     <MotionSection>
-      <PageHeader title="Player Login" description="Временный dev-flow, пока VK авторизация оставлена как будущая интеграция." />
+      <PageHeader title="Вход участника" description="Временный dev-вход; позже — VK или другой провайдер." />
       <SessionRoleNotice />
       <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Dev participant login</CardTitle>
-            <CardDescription>Форма создает или повторно использует dev участника и выставляет participant cookie.</CardDescription>
+            <CardTitle>Dev-вход</CardTitle>
+            <CardDescription>Введите имя и нажмите «Войти» — после этого вы сможете создать команду или присоединиться к существующей.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={onSubmit}>
-              <FormField label="Provider subject" error={form.formState.errors.providerSubject?.message}>
+              <FormField label="Идентификатор (subject)" error={form.formState.errors.providerSubject?.message}>
                 <Input {...form.register('providerSubject')} placeholder="dev-ivanov-42" />
               </FormField>
-              <FormField label="Display name" error={form.formState.errors.displayName?.message}>
+              <FormField label="Отображаемое имя" error={form.formState.errors.displayName?.message}>
                 <Input {...form.register('displayName')} placeholder="Команда Сириус" />
               </FormField>
-              <FormField label="Avatar URL" error={form.formState.errors.avatarUrl?.message}>
+              <FormField label="URL аватара" error={form.formState.errors.avatarUrl?.message}>
                 <Input {...form.register('avatarUrl')} placeholder="https://..." />
               </FormField>
               <Button className="w-full" type="submit" disabled={mutation.isPending}>
@@ -257,17 +240,17 @@ export function PlayerLoginPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>VK placeholder</CardTitle>
-            <CardDescription>Абстракция под будущий auth provider уже заложена в архитектуре, но поток пока не реализован.</CardDescription>
+            <CardTitle>VK — позже</CardTitle>
+            <CardDescription>Внешняя авторизация будет здесь; пока используйте форму слева.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
             <AlertBox
               tone="info"
               title="VK auth позже"
-              description="Здесь появится кнопка внешней авторизации. Пока используйте dev login, чтобы покрыть backend endpoints уже сейчас."
+              description="Вход через соцсети появится позже. Пока войдите через форму слева."
             />
             <Button variant="outline" className="w-full" disabled>
-              VK Login (planned)
+              ВКонтакте (скоро)
             </Button>
           </CardContent>
         </Card>
@@ -284,8 +267,8 @@ export function AdminLoginPage() {
   const form = useForm<AdminLoginValues>({
     resolver: zodResolver(adminLoginSchema),
     defaultValues: {
-      login: 'admin',
-      password: 'admin123',
+      login: '',
+      password: '',
     },
   })
 
@@ -309,23 +292,23 @@ export function AdminLoginPage() {
 
   return (
     <MotionSection>
-      <PageHeader title="Admin Login" description="Локальные логины backend. В development по умолчанию используются `admin / admin123`." />
+      <PageHeader title="Вход администратора" description="Локальная учётная запись из настроек сервера." />
       <SessionRoleNotice />
       <Card className="max-w-xl">
         <CardHeader>
-          <CardTitle>Локальный admin login</CardTitle>
-          <CardDescription>После входа frontend использует admin cookie и route guards для закрытых секций.</CardDescription>
+          <CardTitle>Админка</CardTitle>
+          <CardDescription>После входа используется cookie администратора и защита маршрутов.</CardDescription>
         </CardHeader>
         <CardContent>
           <form
             className="space-y-4"
             onSubmit={form.handleSubmit((values) => mutation.mutate(values))}
           >
-            <FormField label="Login" error={form.formState.errors.login?.message}>
-              <Input {...form.register('login')} />
+            <FormField label="Логин" error={form.formState.errors.login?.message}>
+              <Input {...form.register('login')} autoComplete="username" />
             </FormField>
-            <FormField label="Password" error={form.formState.errors.password?.message}>
-              <Input type="password" {...form.register('password')} />
+            <FormField label="Пароль" error={form.formState.errors.password?.message}>
+              <Input type="password" {...form.register('password')} autoComplete="current-password" />
             </FormField>
             <Button className="w-full" type="submit" disabled={mutation.isPending}>
               <KeyRound className="h-4 w-4" />
@@ -342,8 +325,8 @@ export function QuestStatusPage() {
   return (
     <MotionSection>
       <PageHeader
-        title="Quest Status"
-        description="Публичный экран текущего lifecycle status. Полезен как fallback вне QR flow."
+        title="Статус игрового дня"
+        description="Текущее состояние квеста и сообщение для участников."
         actions={
           <Button variant="outline" asChild>
             <Link to="/">На главную</Link>
@@ -374,17 +357,17 @@ export function QrRoutePage() {
   }, [query.data, queryClient])
 
   if (query.isPending) {
-    return <LoadingScreen label="Разрешаю QR scan..." />
+    return <LoadingScreen label="Обрабатываю QR-код..." />
   }
 
   if (query.error) {
     return (
       <MotionSection>
-        <PageHeader title="QR Route" description="Frontend route существует, но backend QR resolver недоступен." />
+        <PageHeader title="QR-код" description="Сканирование временно недоступно." />
         <AlertBox
           tone="danger"
-          title="Ошибка при обращении к backend QR API"
-          description="Проверьте `VITE_QR_API_BASE_PATH`. Для текущего проекта по умолчанию используется `/api/public/qr/:slug`, который Vite проксирует в backend через общий `/api` proxy."
+          title="Не удалось обработать QR-код"
+          description="Попробуйте позже или обратитесь к организаторам."
         />
       </MotionSection>
     )
@@ -394,20 +377,20 @@ export function QrRoutePage() {
 
   return (
     <MotionSection>
-      <PageHeader title={`QR: ${slug}`} description="Этот экран не prefetch'ится, потому что backend пишет scan event и может открыть вопрос." />
+      <PageHeader title={`QR: ${slug}`} description="Результат сканирования." />
       <AlertBox tone={state.tone} title={state.title} description={query.data.message} />
 
       {query.data.state === 'resolved' && query.data.question ? (
         <Card>
           <CardHeader>
             <CardTitle>{query.data.question.title}</CardTitle>
-            <CardDescription>Вопрос уже открыт команде и доступен без повторного сканирования.</CardDescription>
+            <CardDescription>Вопрос добавлен в ваш список — откройте раздел «Вопросы», чтобы ответить.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2">
               <Badge>{query.data.question.tagName}</Badge>
               <Badge tone={query.data.question.isSolved ? 'success' : 'info'}>
-                {query.data.question.isSolved ? 'Solved' : 'Open'}
+                {query.data.question.isSolved ? 'Решён' : 'Открыт'}
               </Badge>
             </div>
             <RichText value={query.data.question.bodyRichText} />

@@ -5,6 +5,7 @@ import type {
   AuthenticatedAdminResponse,
   CreateTeamRequest,
   DevParticipantLoginRequest,
+  EnigmaAttemptResult,
   EnigmaProfileResponse,
   EnigmaProfileUpsertRequest,
   EnigmaStateResponse,
@@ -400,9 +401,21 @@ export function describeAnswerResult(result: AnswerResult) {
     not_started: 'Квест еще не запущен',
     day_closed: 'Игровой день уже завершен',
     already_solved: 'Вопрос уже решен',
-    cooldown: 'Сработал cooldown',
+    cooldown: 'Сработал кулдаун',
     wrong: 'Ответ неверный',
     correct: 'Ответ принят',
+  }
+
+  return labels[result]
+}
+
+export function describeEnigmaAttemptResult(result: EnigmaAttemptResult) {
+  const labels: Record<EnigmaAttemptResult, string> = {
+    not_started: 'Квест еще не запущен',
+    day_closed: 'Игровой день уже завершен',
+    cooldown: 'Сработал кулдаун',
+    success: 'Успех',
+    failure: 'Неудача',
   }
 
   return labels[result]

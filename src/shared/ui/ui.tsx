@@ -3,6 +3,7 @@ import { cva, type VariantProps } from 'class-variance-authority'
 import { AlertTriangle, LoaderCircle } from 'lucide-react'
 import {
   useEffect,
+  useId,
   useMemo,
   useState,
   type ButtonHTMLAttributes,
@@ -271,18 +272,45 @@ export function StatCard({ label, value, hint }: { label: string; value: ReactNo
   )
 }
 
-export function RichText({ value }: { value: string }) {
+export function RichText({ value, className }: { value: string; className?: string }) {
   return (
-    <div className="rich-text text-sm leading-7">
+    <div className={cn('rich-text text-sm leading-7', className)}>
       <Markdown>{value}</Markdown>
     </div>
+  )
+}
+
+/** Показывает блок «Кулдаун активен» только пока время до следующей попытки > 0. Когда кулдаун истёк — ничего не рендерит. */
+export function CooldownAlertBox({
+  targetIso,
+  serverTimeIso,
+  title = 'Кулдаун активен',
+}: {
+  targetIso?: string | null
+  serverTimeIso?: string | null
+  title?: string
+}) {
+  const [nowMs, setNowMs] = useState(() => Date.now())
+  useEffect(() => {
+    if (!targetIso) return
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [targetIso])
+  const remaining = getRemainingMs(targetIso ?? null, serverTimeIso ?? null, nowMs, nowMs)
+  if (!targetIso || remaining <= 0) return null
+  return (
+    <AlertBox
+      tone="warning"
+      title={title}
+      description={<LiveCountdown targetIso={targetIso} serverTimeIso={serverTimeIso} />}
+    />
   )
 }
 
 export function LiveCountdown({
   targetIso,
   serverTimeIso,
-  emptyLabel = 'Cooldown inactive',
+  emptyLabel = 'Кулдаун не активен',
 }: {
   targetIso?: string | null
   serverTimeIso?: string | null
@@ -357,5 +385,113 @@ export function TimestampHint({ label, value }: { label: string; value?: string 
     <span className="text-xs text-muted-foreground">
       {label}: {formatDateTime(value)}
     </span>
+  )
+}
+
+export function Modal({
+  open,
+  title,
+  children,
+  onClose,
+  className,
+  footer,
+}: {
+  open: boolean
+  title?: ReactNode
+  children: ReactNode
+  onClose: () => void
+  className?: string
+  footer?: ReactNode
+}) {
+  const titleId = useId()
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [open])
+
+  if (!open) {
+    return null
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4" role="presentation">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/60 backdrop-blur-[2px]"
+        aria-label="Закрыть"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        className={cn(
+          'relative z-10 flex max-h-[min(90vh,900px)] w-full max-w-2xl flex-col rounded-3xl border border-border bg-card shadow-xl',
+          className,
+        )}
+      >
+        {title ? (
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3 sm:px-5 sm:py-4">
+            <h2 id={titleId} className="pr-8 text-lg font-semibold text-foreground sm:text-xl">
+              {title}
+            </h2>
+            <Button type="button" variant="ghost" size="sm" className="absolute right-2 top-2 shrink-0" onClick={onClose}>
+              ✕
+            </Button>
+          </div>
+        ) : (
+          <Button type="button" variant="ghost" size="sm" className="absolute right-2 top-2 z-10" onClick={onClose}>
+            ✕
+          </Button>
+        )}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-5">{children}</div>
+        {footer ? <div className="shrink-0 border-t border-border px-4 py-4 sm:px-5">{footer}</div> : null}
+      </div>
+    </div>
+  )
+}
+
+export function ConfirmDialog({
+  open,
+  title,
+  description,
+  confirmLabel,
+  cancelLabel,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean
+  title: string
+  description: string
+  confirmLabel: string
+  cancelLabel: string
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  return (
+    <Modal
+      open={open}
+      onClose={onCancel}
+      title={title}
+      footer={
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            {cancelLabel}
+          </Button>
+          <Button type="button" variant="danger" onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+        </div>
+      }
+    >
+      <p className="text-sm text-muted-foreground">{description}</p>
+    </Modal>
   )
 }

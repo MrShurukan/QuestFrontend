@@ -68,6 +68,16 @@
     color-scheme: dark;
   }
 
+  html.dark select {
+    background-color: var(--card);
+    color: var(--foreground);
+  }
+
+  html.dark select option {
+    background-color: var(--card);
+    color: var(--foreground);
+  }
+
   body {
     margin: 0;
     min-width: 320px;

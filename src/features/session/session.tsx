@@ -46,6 +46,21 @@ export function SessionRoleNotice() {
   const admin = useAdminSession()
   const participant = useParticipantSession()
 
+  if (admin.data && participant.data) {
+    return (
+      <AlertBox
+        tone="warning"
+        title="Одновременно открыты админка и участник"
+        description={
+          <span className="inline-flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            Backend отдаёт приоритет сессии администратора. Чтобы работать как участник, выйдите из админки или откройте отдельное окно / режим инкогнито.
+          </span>
+        }
+      />
+    )
+  }
+
   if (admin.data) {
     return (
       <AlertBox
@@ -54,22 +69,7 @@ export function SessionRoleNotice() {
         description={
           <span className="inline-flex items-center gap-2">
             <ShieldAlert className="h-4 w-4" />
-            Backend предпочитает admin session. Для player flow лучше выйти из admin или открыть отдельный browser profile.
-          </span>
-        }
-      />
-    )
-  }
-
-  if (participant.data) {
-    return (
-      <AlertBox
-        tone="info"
-        title="Участник уже авторизован"
-        description={
-          <span className="inline-flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            Для параллельной работы с админкой используйте logout или отдельное incognito окно.
+            Backend предпочитает сессию администратора. Для входа как участник выйдите из админки или откройте отдельный профиль браузера.
           </span>
         }
       />

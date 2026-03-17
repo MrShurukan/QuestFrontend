@@ -27,8 +27,8 @@ export function useParticipantLogout() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: participantApi.logout,
-    onSuccess: async () => {
+    mutationFn: async () => {
+      await participantApi.logout()
       await queryClient.invalidateQueries({ queryKey: queryKeys.participantSession })
       await queryClient.invalidateQueries({ queryKey: ['teams'] })
       await queryClient.invalidateQueries({ queryKey: ['questions'] })
@@ -41,8 +41,8 @@ export function useAdminLogout() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: adminApi.logout,
-    onSuccess: async () => {
+    mutationFn: async () => {
+      await adminApi.logout()
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminSession })
       await queryClient.invalidateQueries({ queryKey: ['admin'] })
     },

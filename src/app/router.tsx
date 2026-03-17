@@ -15,7 +15,7 @@ import {
   AdminSupportTeamsPage,
   AdminTagsPage,
 } from '@/features/admin/admin-pages'
-import { PlayerEnigmaPage, PlayerProfilePage, PlayerQuestionDetailsPage, PlayerQuestionsPage, PlayerTeamPage } from '@/features/player/player-pages'
+import { PlayerEnigmaPage, PlayerProfilePage, PlayerQuestionsPage, PlayerTeamPage } from '@/features/player/player-pages'
 import { AdminLoginPage, LandingPage, PlayerLoginPage, QrRoutePage, QuestStatusPage } from '@/features/public/public-pages'
 import { RequireAdmin, RequireParticipant } from '@/features/session/session'
 
@@ -45,7 +45,7 @@ export const router = createBrowserRouter([
               { index: true, element: <Navigate replace to="/player/team" /> },
               { path: 'team', element: <PlayerTeamPage /> },
               { path: 'questions', element: <PlayerQuestionsPage /> },
-              { path: 'questions/:questionId', element: <PlayerQuestionDetailsPage /> },
+              { path: 'questions/:questionId', element: <PlayerQuestionsPage /> },
               { path: 'enigma', element: <PlayerEnigmaPage /> },
               { path: 'profile', element: <PlayerProfilePage /> },
             ],
