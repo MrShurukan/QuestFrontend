@@ -25,7 +25,7 @@ import {
   queryKeys,
 } from '@/shared/contracts/api'
 import { useAdminLogout, useAdminSession } from '@/features/session/session-hooks'
-import { AlertBox, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Divider, EmptyState, Input, JsonBlock, KeyValue, LoadingScreen, PageHeader, StatCard, TagChip, Textarea } from '@/shared/ui/ui'
+import { AlertBox, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Divider, EmptyState, Input, JsonBlock, KeyValue, LoadingScreen, MemberAvatar, Modal, PageHeader, StatCard, TagChip, Textarea } from '@/shared/ui/ui'
 import { questDayStatusLabel } from '@/shared/utils/quest-day'
 import { formatDateTime, formatShortDateTime } from '@/shared/utils/time'
 
@@ -131,6 +131,7 @@ const enigmaSchema = z.object({
 const settingsSchema = z.object({
   answerCooldownMinutes: z.coerce.number().min(0),
   enigmaCooldownMinutes: z.coerce.number().min(0),
+  maxTeamMembers: z.coerce.number().int().min(1).max(100),
   defaultAnswerNormalization: z.string().trim().min(1),
   currentQuestDayStateId: z.string().optional(),
   currentRoutingProfileId: z.string().optional(),
@@ -150,6 +151,54 @@ const rewardAdjustSchema = z.object({
   revoke: z.boolean(),
   rewardType: z.string().trim().min(1, 'Укажите тип награды'),
 })
+
+const participantPasswordResetSchema = z
+  .object({
+    newPassword: z.string().min(8, 'Не короче 8 символов'),
+    confirmPassword: z.string(),
+    reason: z.string().optional(),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: 'Пароли не совпадают',
+    path: ['confirmPassword'],
+  })
+
+const adminProfileSchema = z
+  .object({
+    currentPassword: z.string().min(1, 'Введите текущий пароль'),
+    newLogin: z.string().optional(),
+    newPassword: z.string().optional(),
+    confirmPassword: z.string().optional(),
+  })
+  .refine(
+    (d) => {
+      const login = d.newLogin?.trim()
+      const hasLogin = Boolean(login && login.length > 0)
+      const hasPw = Boolean(d.newPassword && d.newPassword.length > 0)
+      return hasLogin || hasPw
+    },
+    { message: 'Укажите новый логин и/или пароль', path: ['newLogin'] },
+  )
+  .refine((d) => !d.newPassword || d.newPassword.length >= 8, {
+    message: 'Не короче 8 символов',
+    path: ['newPassword'],
+  })
+  .refine((d) => !d.newPassword || d.newPassword === d.confirmPassword, {
+    message: 'Пароли не совпадают',
+    path: ['confirmPassword'],
+  })
+
+const createAdminSchema = z
+  .object({
+    login: z.string().trim().min(1, 'Укажите логин').max(100),
+    password: z.string().min(8, 'Не короче 8 символов'),
+    confirmPassword: z.string(),
+    role: z.enum(['SuperAdmin', 'Editor', 'Support']),
+  })
+  .refine((d) => d.password === d.confirmPassword, {
+    message: 'Пароли не совпадают',
+    path: ['confirmPassword'],
+  })
 
 type TagFormInput = z.input<typeof tagSchema>
 type TagFormValues = z.output<typeof tagSchema>
@@ -171,6 +220,11 @@ type QuestDayMessagesFormInput = z.input<typeof questDayMessagesSchema>
 type QuestDayMessagesFormValues = z.output<typeof questDayMessagesSchema>
 type RewardAdjustInput = z.input<typeof rewardAdjustSchema>
 type RewardAdjustValues = z.output<typeof rewardAdjustSchema>
+type ParticipantPasswordResetFormValues = z.infer<typeof participantPasswordResetSchema>
+type AdminProfileFormInput = z.input<typeof adminProfileSchema>
+type AdminProfileFormValues = z.output<typeof adminProfileSchema>
+type CreateAdminFormInput = z.input<typeof createAdminSchema>
+type CreateAdminFormValues = z.output<typeof createAdminSchema>
 
 function normalizeOptional(value?: string | null) {
   return value && value.trim().length > 0 ? value.trim() : null
@@ -501,6 +555,7 @@ function defaultSettingsForm(settings?: GlobalSettingsResponse): SettingsFormVal
   return {
     answerCooldownMinutes: settings?.answerCooldownMinutes ?? 5,
     enigmaCooldownMinutes: settings?.enigmaCooldownMinutes ?? 5,
+    maxTeamMembers: settings?.maxTeamMembers ?? 4,
     defaultAnswerNormalization: settings?.defaultAnswerNormalization ?? '{"trimWhitespace":true}',
     currentQuestDayStateId: settings?.currentQuestDayStateId ?? '',
     currentRoutingProfileId: settings?.currentRoutingProfileId ?? '',
@@ -1789,6 +1844,7 @@ export function AdminSettingsPage() {
       adminApi.updateGlobalSettings({
         answerCooldownMinutes: values.answerCooldownMinutes,
         enigmaCooldownMinutes: values.enigmaCooldownMinutes,
+        maxTeamMembers: values.maxTeamMembers,
         defaultAnswerNormalization: values.defaultAnswerNormalization,
         currentQuestDayStateId: normalizeOptional(values.currentQuestDayStateId),
         currentRoutingProfileId: normalizeOptional(values.currentRoutingProfileId),
@@ -1838,6 +1894,12 @@ export function AdminSettingsPage() {
               <Field label="Кулдаун Enigma (минуты)">
                 <Input type="number" {...form.register('enigmaCooldownMinutes')} />
               </Field>
+              <Field
+                label="Макс. участников в команде"
+                hint="Включая создателя; ограничивает вступление по секрету."
+              >
+                <Input type="number" min={1} max={100} {...form.register('maxTeamMembers')} />
+              </Field>
               <Field label="Профиль маршрутизации">
                 <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('currentRoutingProfileId')}>
                   <option value="">Не указано</option>
@@ -1877,6 +1939,192 @@ export function AdminSettingsPage() {
           </form>
         </CardContent>
       </Card>
+    </section>
+  )
+}
+
+export function AdminProfilePage() {
+  const queryClient = useQueryClient()
+  const session = useAdminSession()
+  const isSuper = session.data?.role === 'SuperAdmin'
+
+  const profileForm = useForm<AdminProfileFormInput, undefined, AdminProfileFormValues>({
+    resolver: zodResolver(adminProfileSchema),
+    defaultValues: {
+      currentPassword: '',
+      newLogin: '',
+      newPassword: '',
+      confirmPassword: '',
+    },
+  })
+
+  const createForm = useForm<CreateAdminFormInput, undefined, CreateAdminFormValues>({
+    resolver: zodResolver(createAdminSchema),
+    defaultValues: {
+      login: '',
+      password: '',
+      confirmPassword: '',
+      role: 'Editor',
+    },
+  })
+
+  const users = useQuery({
+    queryKey: queryKeys.adminUsers,
+    queryFn: adminApi.adminUsers,
+    enabled: Boolean(isSuper),
+    retry: false,
+  })
+
+  const updateProfile = useMutation({
+    mutationFn: (values: AdminProfileFormValues) =>
+      adminApi.updateAdminProfile({
+        currentPassword: values.currentPassword,
+        newLogin: normalizeOptional(values.newLogin),
+        newPassword: normalizeOptional(values.newPassword),
+      }),
+    onSuccess: async () => {
+      toast.success('Профиль обновлён')
+      profileForm.reset({
+        currentPassword: '',
+        newLogin: '',
+        newPassword: '',
+        confirmPassword: '',
+      })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.adminSession })
+      if (isSuper) {
+        await queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers })
+      }
+    },
+    onError: (error) => handleMutationError(error, 'Не удалось обновить профиль'),
+  })
+
+  const createAdmin = useMutation({
+    mutationFn: (values: CreateAdminFormValues) =>
+      adminApi.createAdminUser({
+        login: values.login.trim(),
+        password: values.password,
+        role: values.role,
+      }),
+    onSuccess: async () => {
+      toast.success('Администратор создан')
+      createForm.reset({ login: '', password: '', confirmPassword: '', role: 'Editor' })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.adminUsers })
+    },
+    onError: (error) => handleMutationError(error, 'Не удалось создать администратора'),
+  })
+
+  if (session.isPending) {
+    return <LoadingScreen label="Загружаю сессию..." />
+  }
+
+  return (
+    <section className="space-y-6">
+      <PageHeader
+        title="Профиль администратора"
+        description="Смена логина и пароля. Создание учёток доступно только роли SuperAdmin."
+      />
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Мой логин и пароль</CardTitle>
+            <CardDescription>Текущий пароль обязателен. Можно изменить только логин, только пароль или оба поля.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={profileForm.handleSubmit((v) => updateProfile.mutate(v))}>
+              <Field label="Текущий пароль" error={profileForm.formState.errors.currentPassword?.message}>
+                <Input type="password" autoComplete="current-password" {...profileForm.register('currentPassword')} />
+              </Field>
+              <Field label="Новый логин (необязательно)" error={profileForm.formState.errors.newLogin?.message}>
+                <Input autoComplete="username" {...profileForm.register('newLogin')} placeholder="оставьте пустым, если не меняете" />
+              </Field>
+              <Field label="Новый пароль (необязательно)" error={profileForm.formState.errors.newPassword?.message}>
+                <Input type="password" autoComplete="new-password" {...profileForm.register('newPassword')} />
+              </Field>
+              <Field label="Повторите новый пароль" error={profileForm.formState.errors.confirmPassword?.message}>
+                <Input type="password" autoComplete="new-password" {...profileForm.register('confirmPassword')} />
+              </Field>
+              <Button type="submit" className="w-full" disabled={updateProfile.isPending}>
+                {updateProfile.isPending ? 'Сохранение...' : 'Сохранить изменения'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        {isSuper ? (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Новый администратор</CardTitle>
+                <CardDescription>Логин должен быть уникальным. Пароль не короче 8 символов.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form className="space-y-4" onSubmit={createForm.handleSubmit((v) => createAdmin.mutate(v))}>
+                  <Field label="Логин" error={createForm.formState.errors.login?.message}>
+                    <Input autoComplete="off" {...createForm.register('login')} />
+                  </Field>
+                  <Field label="Роль">
+                    <select
+                      className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm"
+                      {...createForm.register('role')}
+                    >
+                      <option value="Editor">Editor</option>
+                      <option value="Support">Support</option>
+                      <option value="SuperAdmin">SuperAdmin</option>
+                    </select>
+                  </Field>
+                  <Field label="Пароль" error={createForm.formState.errors.password?.message}>
+                    <Input type="password" autoComplete="new-password" {...createForm.register('password')} />
+                  </Field>
+                  <Field label="Повторите пароль" error={createForm.formState.errors.confirmPassword?.message}>
+                    <Input type="password" autoComplete="new-password" {...createForm.register('confirmPassword')} />
+                  </Field>
+                  <Button type="submit" className="w-full" disabled={createAdmin.isPending}>
+                    {createAdmin.isPending ? 'Создаю...' : 'Создать администратора'}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Все администраторы</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {users.isPending ? <p className="text-sm text-muted-foreground">Загрузка...</p> : null}
+                {users.error ? (
+                  <AlertBox tone="danger" title="Не удалось загрузить список" description="Возможно, недостаточно прав." />
+                ) : null}
+                {users.data?.length === 0 ? <EmptyState title="Нет записей" description="Создайте первого администратора формой выше." /> : null}
+                <ul className="space-y-2">
+                  {(users.data ?? []).map((u) => (
+                    <li
+                      key={u.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-border px-4 py-3 text-sm"
+                    >
+                      <span className="font-medium">{u.login}</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone={u.isActive ? 'success' : 'warning'}>{u.isActive ? 'Активен' : 'Выключен'}</Badge>
+                        <Badge>{u.role}</Badge>
+                      </div>
+                      {u.lastLoginAt ? (
+                        <span className="w-full text-xs text-muted-foreground">Последний вход: {formatDateTime(u.lastLoginAt)}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <Card>
+            <CardHeader>
+              <CardTitle>Управление администраторами</CardTitle>
+              <CardDescription>Только SuperAdmin может создавать учётки и видеть полный список.</CardDescription>
+            </CardHeader>
+          </Card>
+        )}
+      </div>
     </section>
   )
 }
@@ -1951,6 +2199,27 @@ export function AdminSupportTeamDetailsPage() {
     onError: (error) => handleMutationError(error, 'Не удалось скорректировать награду'),
   })
 
+  const [passwordResetTarget, setPasswordResetTarget] = useState<{ participantId: Id; displayName: string } | null>(null)
+  const passwordResetForm = useForm<ParticipantPasswordResetFormValues>({
+    resolver: zodResolver(participantPasswordResetSchema),
+    defaultValues: { newPassword: '', confirmPassword: '', reason: '' },
+  })
+
+  const resetParticipantPassword = useMutation({
+    mutationFn: (args: { participantId: Id; values: ParticipantPasswordResetFormValues }) =>
+      adminApi.resetParticipantPassword(args.participantId, {
+        newPassword: args.values.newPassword,
+        reason: args.values.reason?.trim() || undefined,
+      }),
+    onSuccess: async () => {
+      toast.success('Пароль участника обновлён')
+      setPasswordResetTarget(null)
+      passwordResetForm.reset()
+      await queryClient.invalidateQueries({ queryKey: queryKeys.adminSupportTeam(teamId) })
+    },
+    onError: (error) => handleMutationError(error, 'Не удалось сбросить пароль'),
+  })
+
   if (details.isPending || tags.isPending) {
     return <LoadingScreen label="Загружаю данные команды..." />
   }
@@ -2013,13 +2282,33 @@ export function AdminSupportTeamDetailsPage() {
                 {details.data.team.members.map((member) => (
                   <div key={member.membershipId} className="rounded-2xl border border-border bg-background/70 p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="font-medium text-foreground">{member.displayName}</p>
-                        <p className="text-xs text-muted-foreground">Вступил {formatShortDateTime(member.joinedAt)}</p>
+                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                        <MemberAvatar displayName={member.displayName} avatarUrl={member.avatarUrl} size="sm" />
+                        <div className="min-w-0">
+                          <p className="font-medium text-foreground">{member.displayName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Вступил {formatShortDateTime(member.joinedAt)}
+                            {member.provider !== 'local' ? ` · ${member.provider}` : null}
+                          </p>
+                        </div>
                       </div>
-                      <Button variant="danger" size="sm" onClick={() => removeMember(member.membershipId)}>
-                        Удалить
-                      </Button>
+                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                        {member.provider === 'local' ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              passwordResetForm.reset({ newPassword: '', confirmPassword: '', reason: '' })
+                              setPasswordResetTarget({ participantId: member.participantId, displayName: member.displayName })
+                            }}
+                          >
+                            Сброс пароля
+                          </Button>
+                        ) : null}
+                        <Button variant="danger" size="sm" onClick={() => removeMember(member.membershipId)}>
+                          Удалить
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -2123,6 +2412,63 @@ export function AdminSupportTeamDetailsPage() {
           </Card>
         </div>
       </div>
+
+      <Modal
+        open={passwordResetTarget !== null}
+        onClose={() => {
+          setPasswordResetTarget(null)
+          passwordResetForm.reset()
+        }}
+        title={passwordResetTarget ? `Новый пароль: ${passwordResetTarget.displayName}` : undefined}
+        footer={
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setPasswordResetTarget(null)
+                passwordResetForm.reset()
+              }}
+            >
+              Отмена
+            </Button>
+            <Button
+              type="submit"
+              form="support-participant-password-reset"
+              disabled={resetParticipantPassword.isPending}
+            >
+              {resetParticipantPassword.isPending ? 'Сохраняю...' : 'Сохранить пароль'}
+            </Button>
+          </div>
+        }
+      >
+        <form
+          id="support-participant-password-reset"
+          className="space-y-4"
+          onSubmit={passwordResetForm.handleSubmit((values: ParticipantPasswordResetFormValues) => {
+            if (!passwordResetTarget) {
+              return
+            }
+
+            resetParticipantPassword.mutate({ participantId: passwordResetTarget.participantId, values })
+          })}
+        >
+          <AlertBox
+            tone="warning"
+            title="Опасное действие"
+            description="Сообщите участнику новый пароль отдельным безопасным каналом. Старый пароль перестанет работать сразу."
+          />
+          <Field label="Новый пароль" error={passwordResetForm.formState.errors.newPassword?.message}>
+            <Input type="password" autoComplete="new-password" {...passwordResetForm.register('newPassword')} />
+          </Field>
+          <Field label="Повторите пароль" error={passwordResetForm.formState.errors.confirmPassword?.message}>
+            <Input type="password" autoComplete="new-password" {...passwordResetForm.register('confirmPassword')} />
+          </Field>
+          <Field label="Причина (в журнал)" error={passwordResetForm.formState.errors.reason?.message}>
+            <Input {...passwordResetForm.register('reason')} placeholder="например, запрос участника" />
+          </Field>
+        </form>
+      </Modal>
     </section>
   )
 }

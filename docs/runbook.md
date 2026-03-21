@@ -37,11 +37,13 @@ The frontend talks to the backend through Vite proxy:
 - `/api`
 - `/health`
 - `/openapi`
+- `/uploads` (participant avatars from backend static files)
 
 QR resolution uses backend API `/api/public/qr/:slug` through the same `/api` proxy.
 
 ## Auth Notes
 
+- Participants use `/player/login`: registration (multipart form with optional avatar image) or JSON login; session is an HTTP-only cookie.
 - Browser requests must include cookies.
 - Admin cookie has priority over participant cookie in backend dynamic auth.
 - For reliable testing of two roles at once, use separate browser profiles or incognito windows.

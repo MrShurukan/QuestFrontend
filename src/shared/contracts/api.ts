@@ -44,10 +44,29 @@ export interface AuthenticatedAdminResponse {
   isActive: boolean
 }
 
-export interface DevParticipantLoginRequest {
-  providerSubject: string
-  displayName: string
-  avatarUrl?: string | null
+export interface AdminSelfProfileUpdateRequest {
+  currentPassword: string
+  newLogin?: string | null
+  newPassword?: string | null
+}
+
+export interface AdminUserCreateRequest {
+  login: string
+  password: string
+  role: string
+}
+
+export interface AdminUserListItemResponse {
+  id: Id
+  login: string
+  role: string
+  isActive: boolean
+  lastLoginAt?: string | null
+}
+
+export interface ParticipantLoginRequest {
+  login: string
+  password: string
 }
 
 export interface ParticipantProfileResponse {
@@ -57,6 +76,7 @@ export interface ParticipantProfileResponse {
   displayName: string
   avatarUrl?: string | null
   isBlocked: boolean
+  login?: string | null
 }
 
 export interface CreateTeamRequest {
@@ -75,6 +95,13 @@ export interface TeamMemberResponse {
   displayName: string
   status: string
   joinedAt: string
+  avatarUrl?: string | null
+  provider: string
+}
+
+export interface ParticipantPasswordResetRequest {
+  newPassword: string
+  reason?: string | null
 }
 
 export interface TeamSummaryResponse {
@@ -338,6 +365,7 @@ export interface EnigmaProfileResponse extends EnigmaProfileUpsertRequest {
 export interface GlobalSettingsUpdateRequest {
   answerCooldownMinutes: number
   enigmaCooldownMinutes: number
+  maxTeamMembers: number
   defaultAnswerNormalization: string
   currentQuestDayStateId?: Id | null
   currentRoutingProfileId?: Id | null
@@ -402,6 +430,7 @@ export const queryKeys = {
   adminEnigmaProfiles: ['admin', 'enigma', 'profiles'] as const,
   adminQuestDay: ['admin', 'questDay'] as const,
   adminSettings: ['admin', 'settings', 'global'] as const,
+  adminUsers: ['admin', 'users'] as const,
   adminSupportTeams: ['admin', 'support', 'teams'] as const,
   adminSupportTeam: (teamId: Id) => ['admin', 'support', 'team', teamId] as const,
   adminAudit: (take: number) => ['admin', 'audit', take] as const,

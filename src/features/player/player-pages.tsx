@@ -25,6 +25,7 @@ import {
   KeyValue,
   CooldownAlertBox,
   LoadingScreen,
+  MemberAvatar,
   Modal,
   PageHeader,
   RichText,
@@ -153,9 +154,10 @@ export function PlayerTeamPage() {
 
       {session.data ? (
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          <MemberAvatar displayName={session.data.displayName} avatarUrl={session.data.avatarUrl} size="sm" />
           <span className="font-medium text-foreground">{session.data.displayName}</span>
           <span className="hidden sm:inline">·</span>
-          <Badge className="text-[10px]">{session.data.provider}</Badge>
+          <Badge className="text-[10px]">{session.data.login ?? session.data.provider}</Badge>
           {session.data.isBlocked ? <Badge tone="danger">Заблокирован</Badge> : <Badge tone="success">Активен</Badge>}
         </div>
       ) : null}
@@ -248,10 +250,13 @@ function TeamSummaryCard({ team }: { team: TeamSummaryResponse }) {
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {team.members.map((member) => (
-            <div key={member.membershipId} className="rounded-2xl border border-border bg-background/70 p-4">
-              <p className="font-medium text-foreground">{member.displayName}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Вступил {formatShortDateTime(member.joinedAt)}</p>
-              <p className="mt-3 text-xs uppercase tracking-wide text-muted-foreground">{member.status}</p>
+            <div key={member.membershipId} className="flex gap-3 rounded-2xl border border-border bg-background/70 p-4">
+              <MemberAvatar displayName={member.displayName} avatarUrl={member.avatarUrl} />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-foreground">{member.displayName}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Вступил {formatShortDateTime(member.joinedAt)}</p>
+                <p className="mt-3 text-xs uppercase tracking-wide text-muted-foreground">{member.status}</p>
+              </div>
             </div>
           ))}
         </div>
@@ -431,7 +436,7 @@ export function PlayerQuestionsPage() {
       ) : (
         <EmptyState
           title="Пока нет открытых вопросов"
-          description="Найдите QR-код на локации. Когда сервер разрешит сканирование, вопрос появится здесь."
+          description="Найдите QR-код на локации. После сканирования вопрос появится здесь."
           action={
             <Button asChild>
               <Link to="/">Вернуться на главную</Link>
@@ -630,12 +635,15 @@ export function PlayerProfilePage() {
         <Card>
           <CardHeader>
             <CardTitle>{session.data.displayName}</CardTitle>
-            <CardDescription>Идентификатор: {session.data.providerSubject}</CardDescription>
+            <CardDescription>Логин: {session.data.login ?? session.data.providerSubject}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
-            <KeyValue label="Провайдер" value={session.data.provider} />
+            <div className="md:col-span-2 flex items-center gap-3">
+              <MemberAvatar displayName={session.data.displayName} avatarUrl={session.data.avatarUrl} size="lg" />
+            </div>
+            <KeyValue label="Учётная запись" value={session.data.provider === 'local' ? 'Локальная' : session.data.provider} />
             <KeyValue label="Статус" value={session.data.isBlocked ? 'Заблокирован' : 'Активен'} />
-            <KeyValue label="Аватар (URL)" value={session.data.avatarUrl || '—'} />
+            <KeyValue label="Аватар" value={session.data.avatarUrl || 'не загружен'} />
             <KeyValue label="ID участника" value={session.data.id} />
           </CardContent>
         </Card>
@@ -646,11 +654,6 @@ export function PlayerProfilePage() {
             <CardDescription>Чтобы войти под другим аккаунтом, нажмите «Выйти».</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <AlertBox
-              tone="info"
-              title="VK — позже"
-              description="Пока доступен только dev-вход. Место под VK зарезервировано."
-            />
             <Button
               variant="outline"
               className="w-full"

@@ -458,6 +458,57 @@ export function Modal({
   )
 }
 
+function displayNameToInitials(name: string, maxParts = 3) {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) {
+    return '?'
+  }
+
+  return parts
+    .slice(0, maxParts)
+    .map((p) => (p[0] ? p[0].toUpperCase() : ''))
+    .join('') || '?'
+}
+
+export function MemberAvatar({
+  displayName,
+  avatarUrl,
+  size = 'md',
+  className,
+}: {
+  displayName: string
+  avatarUrl?: string | null
+  size?: 'sm' | 'md' | 'lg'
+  className?: string
+}) {
+  const dim =
+    size === 'sm' ? 'h-9 w-9 min-h-9 min-w-9 text-xs' : size === 'lg' ? 'h-14 w-14 min-h-14 min-w-14 text-lg' : 'h-11 w-11 min-h-11 min-w-11 text-sm'
+  const initials = useMemo(() => displayNameToInitials(displayName), [displayName])
+
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt=""
+        className={cn('shrink-0 rounded-full object-cover ring-1 ring-border/80', dim, className)}
+      />
+    )
+  }
+
+  return (
+    <div
+      className={cn(
+        'flex shrink-0 items-center justify-center rounded-full bg-muted font-semibold text-muted-foreground ring-1 ring-border/80',
+        dim,
+        className,
+      )}
+      aria-hidden
+    >
+      {initials}
+    </div>
+  )
+}
+
 export function ConfirmDialog({
   open,
   title,

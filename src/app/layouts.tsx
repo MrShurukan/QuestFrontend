@@ -10,6 +10,7 @@ import {
   ScanSearch,
   Settings,
   ShieldQuestion,
+  UserCircle,
   Users,
   X,
   Zap,
@@ -42,6 +43,7 @@ const adminNavItems = [
   { to: '/admin/enigma', label: 'Enigma', icon: DatabaseZap },
   { to: '/admin/quest-day', label: 'Игровой день', icon: Activity },
   { to: '/admin/settings', label: 'Настройки', icon: Settings },
+  { to: '/admin/profile', label: 'Администраторы', icon: UserCircle },
   { to: '/admin/support/teams', label: 'Команды', icon: Users },
   { to: '/admin/audit', label: 'Аудит', icon: ScanSearch },
 ]

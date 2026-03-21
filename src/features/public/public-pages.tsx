@@ -17,18 +17,30 @@ import { AlertBox, Badge, Button, Card, CardContent, CardDescription, CardHeader
 import { questDayStatusLabel } from '@/shared/utils/quest-day'
 import { formatDateTime } from '@/shared/utils/time'
 
-const playerLoginSchema = z.object({
-  providerSubject: z.string().trim().min(3, 'Нужен dev identifier'),
-  displayName: z.string().trim().min(2, 'Введите отображаемое имя'),
-  avatarUrl: z.union([z.string().trim().url('Нужен валидный URL').max(2048), z.literal('')]).optional(),
+const participantLoginSchema = z.object({
+  login: z.string().trim().min(3, 'Логин от 3 символов').max(100),
+  password: z.string().min(1, 'Введите пароль'),
 })
+
+const participantRegisterSchema = z
+  .object({
+    login: z.string().trim().min(3, 'Логин от 3 символов').max(100),
+    displayName: z.string().trim().min(2, 'Введите ФИО').max(200),
+    password: z.string().min(8, 'Пароль не короче 8 символов'),
+    confirmPassword: z.string().min(1, 'Повторите пароль'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: 'Пароли не совпадают',
+    path: ['confirmPassword'],
+  })
 
 const adminLoginSchema = z.object({
   login: z.string().trim().min(1, 'Введите логин'),
   password: z.string().trim().min(1, 'Введите пароль'),
 })
 
-type PlayerLoginValues = z.infer<typeof playerLoginSchema>
+type ParticipantLoginFormValues = z.infer<typeof participantLoginSchema>
+type ParticipantRegisterFormValues = z.infer<typeof participantRegisterSchema>
 type AdminLoginValues = z.infer<typeof adminLoginSchema>
 
 function MotionSection({ children }: { children: ReactNode }) {
@@ -103,7 +115,7 @@ export function LandingPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-3">
-          <InfoCard title="1. Войти" description="Вход участника (сейчас через dev login)." icon={<UserRound className="h-5 w-5" />} />
+          <InfoCard title="1. Войти" description="Регистрация и вход по логину и паролю." icon={<UserRound className="h-5 w-5" />} />
           <InfoCard title="2. Команда" description="Создать команду или вступить по секретному слову." icon={<UsersRound className="h-5 w-5" />} />
           <InfoCard title="3. Играть" description="Сканировать QR, отвечать на вопросы, пробовать Enigma с кулдауном." icon={<Sparkles className="h-5 w-5" />} />
         </CardContent>
@@ -171,90 +183,145 @@ export function PlayerLoginPage() {
   const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const session = useParticipantSession()
-  const [defaultProviderSubject] = useState(() => {
-    const generated = globalThis.crypto?.randomUUID?.().slice(0, 8)
-    return `dev-${generated || 'local'}`
+  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+
+  const loginForm = useForm<ParticipantLoginFormValues>({
+    resolver: zodResolver(participantLoginSchema),
+    defaultValues: { login: '', password: '' },
   })
-  const form = useForm<PlayerLoginValues>({
-    resolver: zodResolver(playerLoginSchema),
+
+  const registerForm = useForm<ParticipantRegisterFormValues>({
+    resolver: zodResolver(participantRegisterSchema),
     defaultValues: {
-      providerSubject: defaultProviderSubject,
+      login: '',
       displayName: '',
-      avatarUrl: '',
+      password: '',
+      confirmPassword: '',
     },
   })
 
   useEffect(() => {
-    if (session.data) {
+    if (session.isSuccess && session.data) {
       navigate(searchParams.get('from') || '/player/team', { replace: true })
     }
-  }, [navigate, searchParams, session.data])
+  }, [navigate, searchParams, session.data, session.isSuccess])
 
-  const mutation = useMutation({
+  const authSuccess = async (message: string) => {
+    toast.success(message)
+    await queryClient.invalidateQueries({ queryKey: queryKeys.participantSession })
+    navigate(searchParams.get('from') || '/player/team')
+  }
+
+  const loginMutation = useMutation({
     mutationFn: participantApi.login,
-    onSuccess: async () => {
-      toast.success('Вход участника выполнен')
-      await queryClient.invalidateQueries({ queryKey: queryKeys.participantSession })
-      navigate(searchParams.get('from') || '/player/team')
-    },
+    onSuccess: async () => authSuccess('Вход выполнен'),
     onError: (error) => {
-      toast.error(isApiError(error) ? error.message : 'Не удалось войти как участник')
+      toast.error(isApiError(error) ? error.message : 'Не удалось войти')
     },
   })
 
-  const onSubmit = form.handleSubmit((values) =>
-    mutation.mutate({
-      providerSubject: values.providerSubject,
-      displayName: values.displayName,
-      avatarUrl: values.avatarUrl || null,
-    }),
-  )
+  const registerMutation = useMutation({
+    mutationFn: participantApi.register,
+    onSuccess: async () => {
+      setAvatarFile(null)
+      await authSuccess('Регистрация и вход выполнены')
+    },
+    onError: (error) => {
+      toast.error(isApiError(error) ? error.message : 'Не удалось зарегистрироваться')
+    },
+  })
+
+  const switchToRegister = () => {
+    setMode('register')
+    loginForm.reset()
+    loginMutation.reset()
+  }
+
+  const switchToLogin = () => {
+    setMode('login')
+    registerForm.reset()
+    setAvatarFile(null)
+    registerMutation.reset()
+  }
 
   return (
     <MotionSection>
-      <PageHeader title="Вход участника" description="Временный dev-вход; позже — VK или другой провайдер." />
+      <PageHeader
+        title="Участник"
+        description={mode === 'login' ? 'Войдите по логину и паролю.' : 'Создайте аккаунт: логин, ФИО и пароль. Аватар по желанию.'}
+      />
       <SessionRoleNotice />
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Dev-вход</CardTitle>
-            <CardDescription>Введите имя и нажмите «Войти» — после этого вы сможете создать команду или присоединиться к существующей.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form className="space-y-4" onSubmit={onSubmit}>
-              <FormField label="Идентификатор (subject)" error={form.formState.errors.providerSubject?.message}>
-                <Input {...form.register('providerSubject')} placeholder="dev-ivanov-42" />
+      <Card className="mx-auto max-w-md">
+        <CardHeader>
+          <CardTitle>{mode === 'login' ? 'Вход' : 'Регистрация'}</CardTitle>
+          <CardDescription>
+            {mode === 'login'
+              ? 'После входа вы сможете создать команду или присоединиться к существующей.'
+              : 'Логин будет нормализован (регистр не важен).'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {mode === 'login' ? (
+            <form
+              className="space-y-4"
+              onSubmit={loginForm.handleSubmit((values) => loginMutation.mutate(values))}
+            >
+              <FormField label="Логин" error={loginForm.formState.errors.login?.message}>
+                <Input {...loginForm.register('login')} autoComplete="username" placeholder="ivanov" />
               </FormField>
-              <FormField label="Отображаемое имя" error={form.formState.errors.displayName?.message}>
-                <Input {...form.register('displayName')} placeholder="Команда Сириус" />
+              <FormField label="Пароль" error={loginForm.formState.errors.password?.message}>
+                <Input {...loginForm.register('password')} type="password" autoComplete="current-password" />
               </FormField>
-              <FormField label="URL аватара" error={form.formState.errors.avatarUrl?.message}>
-                <Input {...form.register('avatarUrl')} placeholder="https://..." />
-              </FormField>
-              <Button className="w-full" type="submit" disabled={mutation.isPending}>
-                {mutation.isPending ? 'Вхожу...' : 'Войти как участник'}
+              <Button className="w-full" type="submit" disabled={loginMutation.isPending}>
+                {loginMutation.isPending ? 'Вхожу...' : 'Войти'}
+              </Button>
+              <Button type="button" variant="ghost" className="w-full" onClick={switchToRegister}>
+                Регистрация
               </Button>
             </form>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>VK — позже</CardTitle>
-            <CardDescription>Внешняя авторизация будет здесь; пока используйте форму слева.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <AlertBox
-              tone="info"
-              title="VK auth позже"
-              description="Вход через соцсети появится позже. Пока войдите через форму слева."
-            />
-            <Button variant="outline" className="w-full" disabled>
-              ВКонтакте (скоро)
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
+          ) : (
+            <form
+              className="space-y-4"
+              onSubmit={registerForm.handleSubmit((values) =>
+                registerMutation.mutate({
+                  login: values.login,
+                  displayName: values.displayName,
+                  password: values.password,
+                  avatarFile,
+                }),
+              )}
+            >
+              <FormField label="Логин" error={registerForm.formState.errors.login?.message}>
+                <Input {...registerForm.register('login')} autoComplete="username" placeholder="ivanov" />
+              </FormField>
+              <FormField label="ФИО" error={registerForm.formState.errors.displayName?.message}>
+                <Input {...registerForm.register('displayName')} autoComplete="name" placeholder="Иванов Иван" />
+              </FormField>
+              <FormField label="Пароль" error={registerForm.formState.errors.password?.message}>
+                <Input {...registerForm.register('password')} type="password" autoComplete="new-password" />
+              </FormField>
+              <FormField label="Повторите пароль" error={registerForm.formState.errors.confirmPassword?.message}>
+                <Input {...registerForm.register('confirmPassword')} type="password" autoComplete="new-password" />
+              </FormField>
+              <FormField label="Аватар (необязательно)">
+                <Input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="py-2 file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
+                  onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
+                />
+              </FormField>
+              <Button className="w-full" type="submit" disabled={registerMutation.isPending}>
+                {registerMutation.isPending ? 'Регистрирую...' : 'Зарегистрироваться'}
+              </Button>
+              <Button type="button" variant="ghost" className="w-full" onClick={switchToLogin}>
+                Уже есть аккаунт — войти
+              </Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
     </MotionSection>
   )
 }
@@ -273,10 +340,10 @@ export function AdminLoginPage() {
   })
 
   useEffect(() => {
-    if (session.data) {
+    if (session.isSuccess && session.data) {
       navigate(searchParams.get('from') || '/admin', { replace: true })
     }
-  }, [navigate, searchParams, session.data])
+  }, [navigate, searchParams, session.data, session.isSuccess])
 
   const mutation = useMutation({
     mutationFn: adminApi.login,

@@ -10,6 +10,7 @@ test('landing page is reachable', async ({ page }) => {
 test('player login screen opens', async ({ page }) => {
   await page.goto('/player/login')
 
-  await expect(page.getByRole('heading', { name: 'Вход участника' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Войти как участник' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Участник' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Войти' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Регистрация' })).toBeVisible()
 })

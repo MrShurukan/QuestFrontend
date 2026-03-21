@@ -76,7 +76,10 @@ export function SessionRoleNotice() {
     )
   }
 
-  if ((admin.error && !isUnauthorized(admin.error)) || (participant.error && !isUnauthorized(participant.error))) {
+  const adminSessionFailed = Boolean(admin.error && !isUnauthorized(admin.error))
+  const participantSessionFailed = Boolean(participant.error && !isUnauthorized(participant.error))
+
+  if (adminSessionFailed || participantSessionFailed) {
     return (
       <AlertBox
         tone="danger"

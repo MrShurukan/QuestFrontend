@@ -82,7 +82,7 @@ npm run test:e2e
 ## Default Dev Access
 
 - admin login: `admin / admin123`
-- participant login: use `Player Login` and any dev subject/name
+- participant: open `Player Login` (`/player/login`), register once (login, ФИО, password, optional avatar) or sign in with an existing account
 
 ## Folder Highlights
 

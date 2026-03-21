@@ -1,10 +1,13 @@
 import type {
+  AdminSelfProfileUpdateRequest,
+  AdminUserCreateRequest,
+  AdminUserListItemResponse,
   AdminLoginRequest,
   AnswerResult,
   AuditEntryResponse,
   AuthenticatedAdminResponse,
   CreateTeamRequest,
-  DevParticipantLoginRequest,
+  ParticipantLoginRequest,
   EnigmaAttemptResult,
   EnigmaProfileResponse,
   EnigmaProfileUpsertRequest,
@@ -12,6 +15,7 @@ import type {
   GlobalSettingsResponse,
   GlobalSettingsUpdateRequest,
   Id,
+  ParticipantPasswordResetRequest,
   ParticipantProfileResponse,
   ProblemDetails,
   QrBindingOverrideRequest,
@@ -71,7 +75,7 @@ function buildHeaders(init?: RequestInit) {
   const headers = new Headers(init?.headers)
   headers.set('X-Correlation-Id', createCorrelationId())
 
-  if (init?.body && !headers.has('Content-Type')) {
+  if (init?.body && !headers.has('Content-Type') && !(init.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
 
@@ -133,10 +137,24 @@ export const publicApi = {
 }
 
 export const participantApi = {
-  login(payload: DevParticipantLoginRequest) {
-    return request<ParticipantProfileResponse>('/api/participant/auth/dev-login', {
+  login(payload: ParticipantLoginRequest) {
+    return request<ParticipantProfileResponse>('/api/participant/auth/login', {
       method: 'POST',
       body: json(payload),
+    })
+  },
+  register(payload: { login: string; displayName: string; password: string; avatarFile?: File | null }) {
+    const body = new FormData()
+    body.append('login', payload.login)
+    body.append('displayName', payload.displayName)
+    body.append('password', payload.password)
+    if (payload.avatarFile) {
+      body.append('avatar', payload.avatarFile)
+    }
+
+    return request<ParticipantProfileResponse>('/api/participant/auth/register', {
+      method: 'POST',
+      body,
     })
   },
   me() {
@@ -201,6 +219,21 @@ export const adminApi = {
   logout() {
     return request<void>('/api/admin/auth/logout', {
       method: 'POST',
+    })
+  },
+  updateAdminProfile(payload: AdminSelfProfileUpdateRequest) {
+    return request<AuthenticatedAdminResponse>('/api/admin/auth/profile', {
+      method: 'PUT',
+      body: json(payload),
+    })
+  },
+  adminUsers() {
+    return request<AdminUserListItemResponse[]>('/api/admin/users')
+  },
+  createAdminUser(payload: AdminUserCreateRequest) {
+    return request<AdminUserListItemResponse>('/api/admin/users', {
+      method: 'POST',
+      body: json(payload),
     })
   },
   tags() {
@@ -387,6 +420,12 @@ export const adminApi = {
   },
   removeMember(teamId: Id, membershipId: Id, payload: TeamMemberRemovalRequest) {
     return request<void>(`/api/admin/support/teams/${teamId}/members/${membershipId}/remove`, {
+      method: 'POST',
+      body: json(payload),
+    })
+  },
+  resetParticipantPassword(participantId: Id, payload: ParticipantPasswordResetRequest) {
+    return request<void>(`/api/admin/support/participants/${participantId}/password`, {
       method: 'POST',
       body: json(payload),
     })

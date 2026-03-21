@@ -29,10 +29,11 @@ export function useParticipantLogout() {
   return useMutation({
     mutationFn: async () => {
       await participantApi.logout()
-      await queryClient.invalidateQueries({ queryKey: queryKeys.participantSession })
-      await queryClient.invalidateQueries({ queryKey: ['teams'] })
-      await queryClient.invalidateQueries({ queryKey: ['questions'] })
-      await queryClient.invalidateQueries({ queryKey: ['enigma'] })
+      // invalidateQueries + refetch оставляет старые data при ошибке 401 — кажется, что вход всё ещё активен
+      queryClient.removeQueries({ queryKey: queryKeys.participantSession })
+      queryClient.removeQueries({ queryKey: ['teams'] })
+      queryClient.removeQueries({ queryKey: ['questions'] })
+      queryClient.removeQueries({ queryKey: ['enigma'] })
     },
   })
 }
@@ -43,8 +44,8 @@ export function useAdminLogout() {
   return useMutation({
     mutationFn: async () => {
       await adminApi.logout()
-      await queryClient.invalidateQueries({ queryKey: queryKeys.adminSession })
-      await queryClient.invalidateQueries({ queryKey: ['admin'] })
+      queryClient.removeQueries({ queryKey: queryKeys.adminSession })
+      queryClient.removeQueries({ queryKey: ['admin'] })
     },
   })
 }
