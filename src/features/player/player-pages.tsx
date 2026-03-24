@@ -1,21 +1,16 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { CircleHelp, LogOut, WandSparkles } from 'lucide-react'
+import { CircleHelp, LogOut } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { RotorWheel } from '@/features/player/enigma/RotorWheel'
-import { describeAnswerResult, describeEnigmaAttemptResult, isApiError, participantApi } from '@/shared/api/client'
-import {
-  type EnigmaRotorStateDto,
-  type EnigmaStateResponse,
-  type TeamSummaryResponse,
-  queryKeys,
-} from '@/shared/contracts/api'
+import { EnigmaPlayerExperience } from '@/features/player/enigma/EnigmaPlayerExperience'
+import { describeAnswerResult, isApiError, participantApi } from '@/shared/api/client'
+import { type EnigmaStateResponse, type TeamSummaryResponse, queryKeys } from '@/shared/contracts/api'
 import { useParticipantLogout, useParticipantSession } from '@/features/session/session-hooks'
 import {
   AlertBox,
@@ -26,16 +21,15 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CooldownAlertBox,
   EmptyState,
   Input,
   KeyValue,
-  CooldownAlertBox,
   LoadingScreen,
   MemberAvatar,
   Modal,
   PageHeader,
   RichText,
-  StatCard,
   TagChip,
 } from '@/shared/ui/ui'
 import { formatDateTime, formatShortDateTime, formatTimeOnly } from '@/shared/utils/time'
@@ -464,6 +458,8 @@ export function PlayerEnigmaPage() {
     queryFn: participantApi.enigmaState,
     enabled: Boolean(myTeam.data),
     retry: false,
+    refetchInterval: (q) => (q.state.data?.isEnigmaSolved ? 60_000 : false),
+    refetchOnWindowFocus: true,
   })
   const [deltas, setDeltas] = useState<Record<string, number>>({})
 
@@ -502,14 +498,6 @@ export function PlayerEnigmaPage() {
     },
   })
 
-  const attempt = useMutation({
-    mutationFn: async (payload: Record<string, number>) => {
-      const result = await participantApi.submitEnigmaAttempt({ rotorPositions: payload })
-      await queryClient.invalidateQueries({ queryKey: queryKeys.enigmaState })
-      return result
-    },
-  })
-
   if (myTeam.isPending || (myTeam.data ? state.isPending : false)) {
     return <LoadingScreen label="Подготавливаю Enigma..." />
   }
@@ -538,100 +526,13 @@ export function PlayerEnigmaPage() {
         title="Enigma"
         description="Ротор открывается после решения вопроса с соответствующим тегом. Позиции сохраняются автоматически. Между попытками действует кулдаун."
       />
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Роторы</CardTitle>
-            <CardDescription>Крутите диск или используйте кнопки. На телефоне сохранение после отпускания пальца.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4 sm:grid-cols-2">
-            {state.data.rotors.map((rotor) =>
-              rotor.isUnlocked ? (
-                <RotorWheel
-                  key={rotor.id}
-                  label={rotor.label}
-                  tagName={rotor.tagName}
-                  color={rotor.color}
-                  min={rotor.positionMin}
-                  max={rotor.positionMax}
-                  value={effectivePositions[rotor.tagId] ?? rotor.draftPosition}
-                  onChange={(v) => setDeltas((d) => ({ ...d, [rotor.tagId]: v }))}
-                  onCommit={(v) => {
-                    saveDraft.mutate({ [rotor.tagId]: v })
-                  }}
-                />
-              ) : (
-                <LockedRotorSlot key={rotor.id} rotor={rotor} />
-              ),
-            )}
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4">
-          <StatCard
-            label="Режим"
-            value={state.data.mode}
-            hint={`Кулдаун: ${state.data.attemptCooldownMinutes} мин.`}
-          />
-          <Card>
-            <CardHeader>
-              <CardTitle>Отправить попытку</CardTitle>
-              <CardDescription>Следующая попытка будет доступна через некоторое время.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <CooldownAlertBox
-                targetIso={state.data.nextAllowedAttemptAt}
-                serverTimeIso={state.data.serverTime}
-                title="Кулдаун активен"
-              />
-              {attempt.data ? (
-                <AlertBox
-                  tone={attempt.data.result === 'success' ? 'success' : attempt.data.result === 'failure' ? 'danger' : 'info'}
-                  title={describeEnigmaAttemptResult(attempt.data.result)}
-                  description={attempt.data.message}
-                />
-              ) : null}
-              <Button
-                className="w-full"
-                onClick={async () => {
-                  try {
-                    const r = await attempt.mutateAsync(effectivePositions)
-                    toast.success(r.message)
-                  } catch (error) {
-                    toast.error(isApiError(error) ? error.message : 'Не удалось отправить попытку Enigma')
-                  }
-                }}
-                disabled={attempt.isPending}
-              >
-                <WandSparkles className="h-4 w-4" />
-                {attempt.isPending ? 'Проверяю...' : 'Проверить комбинацию'}
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+      <EnigmaPlayerExperience
+        state={state.data}
+        effectivePositions={effectivePositions}
+        setDeltas={setDeltas}
+        saveDraft={{ mutate: saveDraft.mutate, isPending: saveDraft.isPending }}
+      />
     </MotionSection>
-  )
-}
-
-function LockedRotorSlot({ rotor }: { rotor: EnigmaRotorStateDto }) {
-  return (
-    <div className="flex min-h-[17.5rem] flex-col justify-between rounded-2xl border border-dashed border-border/80 bg-muted/40 p-4">
-      <div className="flex items-center justify-between gap-2">
-        <TagChip name={rotor.tagName} color={rotor.color} />
-        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Закрыто</span>
-      </div>
-      <div className="flex flex-1 flex-col items-center justify-center gap-3 py-6">
-        <div
-          className="h-36 w-full max-w-[8.5rem] rounded-xl bg-gradient-to-b from-muted to-muted/30 opacity-70"
-          style={{ boxShadow: 'inset 0 2px 12px rgba(0,0,0,0.08)' }}
-        />
-        <p className="max-w-[14rem] text-center text-xs text-muted-foreground">
-          Ротор откроется, когда команда решит вопрос с тегом «{rotor.tagName}».
-        </p>
-      </div>
-      <p className="text-center text-[11px] text-muted-foreground/80">{rotor.label}</p>
-    </div>
   )
 }
 

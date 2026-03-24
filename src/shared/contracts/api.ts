@@ -21,7 +21,13 @@ export type AnswerResult =
   | 'cooldown'
   | 'wrong'
   | 'correct'
-export type EnigmaAttemptResult = 'not_started' | 'day_closed' | 'cooldown' | 'success' | 'failure'
+export type EnigmaAttemptResult =
+  | 'not_started'
+  | 'day_closed'
+  | 'cooldown'
+  | 'success'
+  | 'failure'
+  | 'already_solved'
 
 export interface ProblemDetails {
   type?: string
@@ -111,6 +117,9 @@ export interface TeamSummaryResponse {
   isLocked: boolean
   isHidden: boolean
   isDisqualified: boolean
+  /** Denormalized flag; absent on older API payloads. */
+  enigmaSolved?: boolean
+  enigmaSolvedAt?: string | null
   members: TeamMemberResponse[]
 }
 
@@ -199,6 +208,8 @@ export interface EnigmaStateResponse {
   attemptCooldownMinutes: number
   nextAllowedAttemptAt?: string | null
   rotors: EnigmaRotorStateDto[]
+  isEnigmaSolved?: boolean
+  solvedRevealMessage?: string | null
   serverTime: string
 }
 
@@ -213,6 +224,7 @@ export interface SubmitEnigmaAttemptRequest {
 export interface SubmitEnigmaAttemptResponse {
   result: EnigmaAttemptResult
   message: string
+  afterFailureMessage?: string | null
   nextAllowedAttemptAt?: string | null
   serverTime: string
 }

@@ -462,6 +462,7 @@ export function describeEnigmaAttemptResult(result: EnigmaAttemptResult) {
     cooldown: 'Сработал кулдаун',
     success: 'Успех',
     failure: 'Неудача',
+    already_solved: 'Уже расшифровано',
   }
 
   return labels[result]

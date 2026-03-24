@@ -1620,10 +1620,16 @@ export function AdminEnigmaPage() {
               </Field>
               <ToggleField label="Профиль активен" {...form.register('isActive')} checked={form.watch('isActive')} />
             </div>
-            <Field label="Сообщение при успехе">
+            <Field
+              label="Текст расшифровки (успех)"
+              hint="Показывается на «бумаге»: при верной комбинации — как есть; при ошибке — в замаскированном виде (игроки не видят настоящий текст)."
+            >
               <Textarea rows={3} {...form.register('successMessage')} />
             </Field>
-            <Field label="Сообщение при неудаче">
+            <Field
+              label="Текст уведомления после ошибки"
+              hint="Короткий текст для всплывающего уведомления после анимации (на бумаге не используется)."
+            >
               <Textarea rows={3} {...form.register('failureMessage')} />
             </Field>
             <Divider />
@@ -2157,6 +2163,12 @@ export function AdminSupportTeamsPage() {
                 <Badge>{team.status}</Badge>
                 {team.isLocked ? <Badge tone="warning">Заблокирована</Badge> : null}
                 {team.isDisqualified ? <Badge tone="danger">Дисквалифицирована</Badge> : null}
+                {team.enigmaSolved ? (
+                  <Badge tone="success">
+                    Энигма пройдена
+                    {team.enigmaSolvedAt ? ` · ${formatDateTime(team.enigmaSolvedAt)}` : ''}
+                  </Badge>
+                ) : null}
               </div>
               <Button asChild className="w-full">
                 <Link to={`/admin/support/teams/${team.id}`}>Открыть команду</Link>
@@ -2277,6 +2289,12 @@ export function AdminSupportTeamDetailsPage() {
                 {details.data.team.isLocked ? <Badge tone="warning">Заблокирована</Badge> : null}
                 {details.data.team.isDisqualified ? <Badge tone="danger">Дисквалифицирована</Badge> : null}
                 {details.data.team.isHidden ? <Badge tone="info">Скрыта</Badge> : null}
+                {details.data.team.enigmaSolved ? (
+                  <Badge tone="success">
+                    Энигма пройдена
+                    {details.data.team.enigmaSolvedAt ? ` · ${formatDateTime(details.data.team.enigmaSolvedAt)}` : ''}
+                  </Badge>
+                ) : null}
               </div>
               <div className="space-y-3">
                 {details.data.team.members.map((member) => (
