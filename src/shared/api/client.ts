@@ -37,6 +37,7 @@ import type {
   SubmitAnswerResponse,
   SubmitEnigmaAttemptRequest,
   SubmitEnigmaAttemptResponse,
+  UpdateEnigmaDraftPositionsRequest,
   TagResponse,
   TagUpsertRequest,
   TeamMemberRemovalRequest,
@@ -197,6 +198,12 @@ export const participantApi = {
   },
   enigmaState() {
     return request<EnigmaStateResponse>('/api/enigma/state')
+  },
+  updateEnigmaDraftPositions(payload: UpdateEnigmaDraftPositionsRequest) {
+    return request<void>('/api/enigma/draft-positions', {
+      method: 'PUT',
+      body: json(payload),
+    })
   },
   submitEnigmaAttempt(payload: SubmitEnigmaAttemptRequest) {
     return request<SubmitEnigmaAttemptResponse>('/api/enigma/attempts', {

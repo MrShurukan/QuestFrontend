@@ -174,6 +174,7 @@ export interface QrResolutionResponse {
   serverTime: string
 }
 
+/** Admin enigma profile rotor row (no team runtime fields). */
 export interface EnigmaRotorDefinitionDto {
   id: Id
   tagId: Id
@@ -184,7 +185,12 @@ export interface EnigmaRotorDefinitionDto {
   positionMin: number
   positionMax: number
   isActive: boolean
-  rewardCount: number
+}
+
+/** Player enigma state: definition + unlock + persisted draft value. */
+export interface EnigmaRotorStateDto extends EnigmaRotorDefinitionDto {
+  isUnlocked: boolean
+  draftPosition: number
 }
 
 export interface EnigmaStateResponse {
@@ -192,8 +198,12 @@ export interface EnigmaStateResponse {
   mode: EnigmaMode
   attemptCooldownMinutes: number
   nextAllowedAttemptAt?: string | null
-  rotors: EnigmaRotorDefinitionDto[]
+  rotors: EnigmaRotorStateDto[]
   serverTime: string
+}
+
+export interface UpdateEnigmaDraftPositionsRequest {
+  positions: Record<Id, number>
 }
 
 export interface SubmitEnigmaAttemptRequest {

@@ -8,8 +8,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { RotorWheel } from '@/features/player/enigma/RotorWheel'
 import { describeAnswerResult, describeEnigmaAttemptResult, isApiError, participantApi } from '@/shared/api/client'
-import { type EnigmaRotorDefinitionDto, type TeamSummaryResponse, queryKeys } from '@/shared/contracts/api'
+import {
+  type EnigmaRotorStateDto,
+  type EnigmaStateResponse,
+  type TeamSummaryResponse,
+  queryKeys,
+} from '@/shared/contracts/api'
 import { useParticipantLogout, useParticipantSession } from '@/features/session/session-hooks'
 import {
   AlertBox,
@@ -459,18 +465,42 @@ export function PlayerEnigmaPage() {
     enabled: Boolean(myTeam.data),
     retry: false,
   })
-  const [positions, setPositions] = useState<Record<string, number>>({})
-  const defaultPositions = useMemo(
-    () =>
-      state.data
-        ? Object.fromEntries(state.data.rotors.map((rotor) => [rotor.tagId, rotor.positionMin]))
-        : {},
-    [state.data],
-  )
-  const effectivePositions = useMemo(
-    () => ({ ...defaultPositions, ...positions }),
-    [defaultPositions, positions],
-  )
+  const [deltas, setDeltas] = useState<Record<string, number>>({})
+
+  useEffect(() => {
+    setDeltas({})
+  }, [state.data?.profileId])
+
+  const effectivePositions = useMemo(() => {
+    if (!state.data) return {}
+    return Object.fromEntries(
+      state.data.rotors.map((r) => [r.tagId, deltas[r.tagId] ?? r.draftPosition]),
+    )
+  }, [state.data, deltas])
+
+  const saveDraft = useMutation({
+    mutationFn: (positions: Record<string, number>) =>
+      participantApi.updateEnigmaDraftPositions({ positions }),
+    onSuccess(_data, positions) {
+      queryClient.setQueryData<EnigmaStateResponse>(queryKeys.enigmaState, (old) => {
+        if (!old) return old
+        return {
+          ...old,
+          rotors: old.rotors.map((r) =>
+            positions[r.tagId] !== undefined ? { ...r, draftPosition: positions[r.tagId]! } : r,
+          ),
+        }
+      })
+      setDeltas((d) => {
+        const next = { ...d }
+        for (const k of Object.keys(positions)) delete next[k]
+        return next
+      })
+    },
+    onError(error) {
+      toast.error(isApiError(error) ? error.message : 'Не удалось сохранить позицию ротора')
+    },
+  })
 
   const attempt = useMutation({
     mutationFn: async (payload: Record<string, number>) => {
@@ -504,28 +534,36 @@ export function PlayerEnigmaPage() {
 
   return (
     <MotionSection>
-      <PageHeader title="Enigma" description="Роторы по цветам тегов; между попытками действует кулдаун." />
+      <PageHeader
+        title="Enigma"
+        description="Ротор открывается после решения вопроса с соответствующим тегом. Позиции сохраняются автоматически. Между попытками действует кулдаун."
+      />
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <Card>
           <CardHeader>
             <CardTitle>Роторы</CardTitle>
-            <CardDescription>Выберите позицию каждого ротора и отправьте комбинацию.</CardDescription>
+            <CardDescription>Крутите диск или используйте кнопки. На телефоне сохранение после отпускания пальца.</CardDescription>
           </CardHeader>
-          <CardContent className="grid gap-4 md:grid-cols-2">
-            {state.data.rotors.map((rotor) => (
-              <RotorCard
-                key={rotor.id}
-                rotor={rotor}
-                value={effectivePositions[rotor.tagId] ?? rotor.positionMin}
-                onChange={(value) =>
-                  setPositions((current) => ({
-                    ...defaultPositions,
-                    ...current,
-                    [rotor.tagId]: value,
-                  }))
-                }
-              />
-            ))}
+          <CardContent className="grid gap-4 sm:grid-cols-2">
+            {state.data.rotors.map((rotor) =>
+              rotor.isUnlocked ? (
+                <RotorWheel
+                  key={rotor.id}
+                  label={rotor.label}
+                  tagName={rotor.tagName}
+                  color={rotor.color}
+                  min={rotor.positionMin}
+                  max={rotor.positionMax}
+                  value={effectivePositions[rotor.tagId] ?? rotor.draftPosition}
+                  onChange={(v) => setDeltas((d) => ({ ...d, [rotor.tagId]: v }))}
+                  onCommit={(v) => {
+                    saveDraft.mutate({ [rotor.tagId]: v })
+                  }}
+                />
+              ) : (
+                <LockedRotorSlot key={rotor.id} rotor={rotor} />
+              ),
+            )}
           </CardContent>
         </Card>
 
@@ -576,38 +614,24 @@ export function PlayerEnigmaPage() {
   )
 }
 
-function RotorCard({
-  rotor,
-  value,
-  onChange,
-}: {
-  rotor: EnigmaRotorDefinitionDto
-  value: number
-  onChange: (value: number) => void
-}) {
-  const canDecrease = value > rotor.positionMin
-  const canIncrease = value < rotor.positionMax
-
+function LockedRotorSlot({ rotor }: { rotor: EnigmaRotorStateDto }) {
   return (
-    <motion.div layout className="rounded-3xl border border-border bg-background/60 p-5" whileHover={{ y: -2 }}>
-      <div className="flex items-center justify-between gap-3">
+    <div className="flex min-h-[17.5rem] flex-col justify-between rounded-2xl border border-dashed border-border/80 bg-muted/40 p-4">
+      <div className="flex items-center justify-between gap-2">
         <TagChip name={rotor.tagName} color={rotor.color} />
-        <Badge>{rotor.rewardCount} наград</Badge>
+        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">Закрыто</span>
       </div>
-      <p className="mt-4 text-lg font-semibold text-foreground">{rotor.label}</p>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Диапазон {rotor.positionMin}..{rotor.positionMax}
-      </p>
-      <div className="mt-4 flex items-center gap-3">
-        <Button variant="outline" onClick={() => canDecrease && onChange(value - 1)} disabled={!canDecrease}>
-          -1
-        </Button>
-        <div className="flex-1 rounded-2xl border border-border bg-card px-4 py-3 text-center text-xl font-semibold text-foreground">{value}</div>
-        <Button variant="outline" onClick={() => canIncrease && onChange(value + 1)} disabled={!canIncrease}>
-          +1
-        </Button>
+      <div className="flex flex-1 flex-col items-center justify-center gap-3 py-6">
+        <div
+          className="h-36 w-full max-w-[8.5rem] rounded-xl bg-gradient-to-b from-muted to-muted/30 opacity-70"
+          style={{ boxShadow: 'inset 0 2px 12px rgba(0,0,0,0.08)' }}
+        />
+        <p className="max-w-[14rem] text-center text-xs text-muted-foreground">
+          Ротор откроется, когда команда решит вопрос с тегом «{rotor.tagName}».
+        </p>
       </div>
-    </motion.div>
+      <p className="text-center text-[11px] text-muted-foreground/80">{rotor.label}</p>
+    </div>
   )
 }
 
