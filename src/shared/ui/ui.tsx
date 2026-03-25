@@ -1,10 +1,11 @@
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
-import { AlertTriangle, LoaderCircle } from 'lucide-react'
+import { AlertTriangle, HelpCircle, LoaderCircle } from 'lucide-react'
 import {
   useEffect,
   useId,
   useMemo,
+  useRef,
   useState,
   type ButtonHTMLAttributes,
   type CSSProperties,
@@ -148,6 +149,73 @@ export function Badge({
   return (
     <span className={cn('inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold', classes[tone], className)} style={style}>
       {children}
+    </span>
+  )
+}
+
+export function HelpBadge({
+  text,
+  title = 'Пояснение',
+  className,
+}: {
+  text: ReactNode
+  title?: string
+  className?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLSpanElement | null>(null)
+  const panelId = useId()
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (ref.current?.contains(event.target as Node)) {
+        return
+      }
+      setOpen(false)
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false)
+      }
+    }
+
+    window.addEventListener('pointerdown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      window.removeEventListener('pointerdown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  return (
+    <span ref={ref} className={cn('relative inline-flex align-middle', className)}>
+      <button
+        type="button"
+        aria-label={title}
+        aria-expanded={open}
+        aria-controls={panelId}
+        onClick={() => setOpen((current) => !current)}
+        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-info/30 bg-info/10 text-info transition-colors hover:bg-info/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        <HelpCircle className="h-3.5 w-3.5" />
+      </button>
+      {open ? (
+        <div
+          id={panelId}
+          role="dialog"
+          aria-label={title}
+          className="absolute left-0 top-full z-20 mt-2 w-80 max-w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-border bg-popover p-3 text-left shadow-xl"
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+          <div className="mt-1 text-sm text-foreground">{text}</div>
+        </div>
+      ) : null}
     </span>
   )
 }

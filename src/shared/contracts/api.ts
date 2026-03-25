@@ -201,6 +201,7 @@ export interface EnigmaRotorDefinitionDto {
   tagId: Id
   tagName: string
   color: string
+  colorOverride?: string | null
   label: string
   displayOrder: number
   positionMin: number
@@ -284,6 +285,10 @@ export interface QuestionUpsertRequest {
 
 export interface QuestionResponse extends QuestionUpsertRequest {
   id: Id
+}
+
+export interface QuestionImageUploadResponse {
+  imageUrl: string
 }
 
 export interface QuestionPoolEntryRequest {
@@ -439,10 +444,33 @@ export interface AuditEntryResponse {
   correlationId?: string | null
 }
 
+export interface TeamSupportQuestionResponse {
+  id: Id
+  tagId: Id
+  tagName: string
+  tagColor: string
+  title: string
+  state: 'closed' | 'open' | 'solved'
+  isSolved: boolean
+  isAvailableNow: boolean
+  firstUnlockedAt?: string | null
+  lastAttemptAt?: string | null
+  nextAllowedAnswerAt?: string | null
+}
+
+export interface TeamSupportTimelineEntryResponse {
+  id: string
+  occurredAt: string
+  kind: string
+  title: string
+  description: string
+  reason?: string | null
+}
+
 export interface TeamSupportDetailsResponse {
   team: TeamSummaryResponse
-  questions: QuestionSummaryResponse[]
-  auditTrail: AuditEntryResponse[]
+  questions: TeamSupportQuestionResponse[]
+  timeline: TeamSupportTimelineEntryResponse[]
 }
 
 export const queryKeys = {

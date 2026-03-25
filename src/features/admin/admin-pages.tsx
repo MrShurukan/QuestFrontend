@@ -25,14 +25,15 @@ import {
   queryKeys,
 } from '@/shared/contracts/api'
 import { useAdminLogout, useAdminSession } from '@/features/session/session-hooks'
-import { AlertBox, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Divider, EmptyState, Input, JsonBlock, KeyValue, LoadingScreen, MemberAvatar, Modal, PageHeader, StatCard, TagChip, Textarea } from '@/shared/ui/ui'
+import { AlertBox, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Divider, EmptyState, HelpBadge, Input, JsonBlock, KeyValue, LoadingScreen, MemberAvatar, Modal, PageHeader, Select, StatCard, TagChip, Textarea } from '@/shared/ui/ui'
 import { questDayStatusLabel } from '@/shared/utils/quest-day'
 import { formatDateTime, formatShortDateTime } from '@/shared/utils/time'
+import { buildTimezoneOptions } from '@/shared/utils/timezone'
 
 const tagSchema = z.object({
-  code: z.string().trim().min(1, 'Code is required'),
-  name: z.string().trim().min(2, 'Name is required'),
-  color: z.string().trim().min(4, 'Color is required'),
+  code: z.string().trim().min(1, 'Укажите код'),
+  name: z.string().trim().min(2, 'Укажите название'),
+  color: z.string().trim().min(4, 'Укажите цвет'),
   isActive: z.boolean(),
   sortOrder: z.coerce.number(),
   description: z.string().optional(),
@@ -40,9 +41,9 @@ const tagSchema = z.object({
 
 const questionSchema = z.object({
   tagId: z.string().min(1, 'Выберите тег'),
-  title: z.string().trim().min(2, 'Title is required'),
-  bodyRichText: z.string().trim().min(1, 'Question body is required'),
-  footerHint: z.string().trim().min(1, 'Footer hint is required'),
+  title: z.string().trim().min(2, 'Укажите заголовок'),
+  bodyRichText: z.string().trim().min(1, 'Введите текст вопроса'),
+  footerHint: z.string().trim().min(1, 'Введите подсказку'),
   imageUrl: z.string().optional(),
   status: z.enum(['Draft', 'Active', 'Disabled', 'Archived']),
   isActive: z.boolean(),
@@ -60,7 +61,7 @@ const questionSchema = z.object({
 
 const poolSchema = z.object({
   tagId: z.string().min(1, 'Выберите тег'),
-  name: z.string().trim().min(2, 'Name is required'),
+  name: z.string().trim().min(2, 'Укажите название'),
   isActive: z.boolean(),
   isArchived: z.boolean(),
   description: z.string().optional(),
@@ -77,15 +78,15 @@ const poolSchema = z.object({
 
 const qrSchema = z.object({
   tagId: z.string().min(1, 'Выберите тег'),
-  slug: z.string().trim().min(4, 'Slug is required'),
-  label: z.string().trim().min(2, 'Label is required'),
+  slug: z.string().trim().min(4, 'Укажите slug'),
+  label: z.string().trim().min(2, 'Укажите подпись'),
   slotIndex: z.coerce.number(),
   isActive: z.boolean(),
   notes: z.string().optional(),
 })
 
 const routingSchema = z.object({
-  name: z.string().trim().min(2, 'Name is required'),
+  name: z.string().trim().min(2, 'Укажите название'),
   isActive: z.boolean(),
   description: z.string().optional(),
   tagStates: z.array(
@@ -143,13 +144,6 @@ const settingsSchema = z.object({
 const questDayMessagesSchema = z.object({
   preStartMessage: z.string().trim().min(1),
   dayClosedMessage: z.string().trim().min(1),
-})
-
-const rewardAdjustSchema = z.object({
-  tagId: z.string().min(1, 'Выберите тег'),
-  sourceQuestionId: z.string().optional(),
-  revoke: z.boolean(),
-  rewardType: z.string().trim().min(1, 'Укажите тип награды'),
 })
 
 const participantPasswordResetSchema = z
@@ -218,8 +212,6 @@ type SettingsFormInput = z.input<typeof settingsSchema>
 type SettingsFormValues = z.output<typeof settingsSchema>
 type QuestDayMessagesFormInput = z.input<typeof questDayMessagesSchema>
 type QuestDayMessagesFormValues = z.output<typeof questDayMessagesSchema>
-type RewardAdjustInput = z.input<typeof rewardAdjustSchema>
-type RewardAdjustValues = z.output<typeof rewardAdjustSchema>
 type ParticipantPasswordResetFormValues = z.infer<typeof participantPasswordResetSchema>
 type AdminProfileFormInput = z.input<typeof adminProfileSchema>
 type AdminProfileFormValues = z.output<typeof adminProfileSchema>
@@ -230,15 +222,159 @@ function normalizeOptional(value?: string | null) {
   return value && value.trim().length > 0 ? value.trim() : null
 }
 
+const HELP_TEXTS = {
+  tagCode:
+    'Короткий служебный идентификатор тега. Он нужен для стабильных внутренних связей и не зависит от отображаемого названия, поэтому переименование тега не ломает маршрутизацию и связанные настройки.',
+  questionArchived:
+    'Архивный вопрос сохраняется для истории и запасных сценариев, но не должен участвовать в живой игре. Это способ убрать вопрос из работы без удаления данных.',
+  questionActive:
+    'Активный вопрос может использоваться в пулах и ротации. Если выключить вопрос, новые открытия через живую конфигурацию происходить не должны.',
+  poolActive:
+    'Активный пул можно выбрать в текущей ротации. Неактивный пул хранится как заготовка или резерв, но не должен использоваться в рабочем профиле.',
+  poolArchived:
+    'Архивный пул оставляется для истории или старого сценария. Обычно его не используют в текущей игре.',
+  poolEntryEnabled:
+    'Включённая запись участвует в выборе вопроса внутри пула. Если выключить запись, вопрос останется в составе пула, но ротация будет его пропускать.',
+  qrSlotIndex:
+    'Это постоянный номер QR внутри своего тега. Сам QR никуда не сдвигается: система берёт его индекс слота, прибавляет текущую ротацию тега и по этому результату выбирает позицию вопроса в активном пуле.',
+  qrActive:
+    'Неактивный QR остаётся в базе и предпросмотре, но не должен открывать вопрос участникам.',
+  rotationProfileActive:
+    'Именно этот профиль управляет живой ротацией для новых QR-сканов. Переключение профиля меняет только будущие открытия, а не уже открытые вопросы команд.',
+  rotationOffset:
+    'Смещение ротации определяет, с какого места активного пула начинается выдача вопросов для QR этого тега. При изменении смещения QR остаются теми же, но начинают открывать другие вопросы из того же пула.',
+  rotationSelectionMode:
+    'Сейчас в проекте реализован только один режим: PoolSlotRotation. Он выбирает вопрос по формуле slotIndex + rotationOffset внутри активного пула.',
+  rotationPreview:
+    'Показывает, какой вопрос откроет каждый QR прямо сейчас. Это основной экран проверки перед запуском и во время живой ротации.',
+  rotationOverride:
+    'Позволяет вручную назначить конкретный вопрос отдельному QR поверх обычной ротации. Используется для точечных исключений и аварийных правок.',
+  settingsQuestDayStateId:
+    'Это техническая ссылка на текущую запись игрового дня. Она нужна системе для связи с runtime-состоянием, но редактировать её вручную администратору обычно не нужно.',
+  settingsTimezone:
+    'Это часовой пояс мероприятия. Он нужен, чтобы в интерфейсе использовать понятную для организаторов временную зону, например UTC+3 или Europe/Moscow. Серверные логи и внутренние таймеры продолжают работать в UTC.',
+  settingsFlags:
+    'Служебные JSON-переключатели для редких или аварийных настроек. Это расширенная зона для технических сценариев, а не повседневная настройка мероприятия.',
+} as const
+
+const SUPPORT_QUESTION_STATE_META = {
+  closed: { label: 'Закрыт', tone: 'warning' },
+  open: { label: 'Открыт', tone: 'info' },
+  solved: { label: 'Решён', tone: 'success' },
+} as const
+
+function labelWithHelp(label: string, helpText?: string) {
+  return helpText ? (
+    <span className="inline-flex items-center gap-2">
+      <span>{label}</span>
+      <HelpBadge text={helpText} />
+    </span>
+  ) : (
+    label
+  )
+}
+
+function questionStatusLabel(status: QuestionResponse['status']) {
+  const labels: Record<QuestionResponse['status'], string> = {
+    Draft: 'Черновик',
+    Active: 'Активен',
+    Disabled: 'Отключён',
+    Archived: 'Архив',
+  }
+
+  return labels[status]
+}
+
+function adminRoleLabel(role: string) {
+  const labels: Record<string, string> = {
+    SuperAdmin: 'Суперадмин',
+    Editor: 'Редактор',
+    Support: 'Поддержка',
+  }
+
+  return labels[role] ?? role
+}
+
+function teamStatusLabel(status: string) {
+  const labels: Record<string, string> = {
+    Active: 'Активна',
+    Locked: 'Заблокирована',
+    Archived: 'Архивная',
+  }
+
+  return labels[status] ?? status
+}
+
+function routingResolutionLabel(mode: string) {
+  if (mode.includes('Override')) {
+    return 'Переопределение'
+  }
+
+  if (mode === 'Resolved') {
+    return 'Ротация'
+  }
+
+  if (mode === 'InactiveQr') {
+    return 'QR выключен'
+  }
+
+  if (mode === 'InactiveTag') {
+    return 'Тег выключен'
+  }
+
+  if (mode === 'NoPoolMatch') {
+    return 'Нет вопроса'
+  }
+
+  return mode
+}
+
+function selectionModeLabel(mode: string) {
+  if (mode === 'PoolSlotRotation') {
+    return 'Ротация по слотам пула'
+  }
+
+  return mode
+}
+
+function timelineKindLabel(kind: string) {
+  const labels: Record<string, string> = {
+    'team-created': 'Создание команды',
+    'member-joined': 'Вступление',
+    'member-removed': 'Исключение',
+    'question-opened': 'Открытие вопроса',
+    'question-attempt': 'Попытка ответа',
+    'question-solved': 'Решение вопроса',
+    'enigma-attempt': 'Попытка Enigma',
+    'enigma-solved': 'Решение Enigma',
+    'final-photo-uploaded': 'Финальное фото',
+    'support-action': 'Действие поддержки',
+  }
+
+  return labels[kind] ?? kind
+}
+
+function timelineKindTone(kind: string): 'default' | 'success' | 'warning' | 'danger' | 'info' {
+  if (kind === 'question-solved' || kind === 'enigma-solved' || kind === 'final-photo-uploaded') {
+    return 'success'
+  }
+
+  if (kind === 'member-removed' || kind === 'support-action') {
+    return 'warning'
+  }
+
+  return 'info'
+}
+
 function Field({
   label,
   error,
   children,
   hint,
 }: {
-  label: string
+  label: ReactNode
   error?: string
-  hint?: string
+  hint?: ReactNode
   children: ReactNode
 }) {
   return (
@@ -256,8 +392,8 @@ function ToggleField({
   description,
   ...props
 }: {
-  label: string
-  description?: string
+  label: ReactNode
+  description?: ReactNode
 } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <label className="flex items-start gap-3 rounded-2xl border border-border bg-background/70 px-4 py-3">
@@ -270,7 +406,7 @@ function ToggleField({
   )
 }
 
-function SearchField({ value, onChange, placeholder = 'Filter...' }: { value: string; onChange: (value: string) => void; placeholder?: string }) {
+function SearchField({ value, onChange, placeholder = 'Поиск...' }: { value: string; onChange: (value: string) => void; placeholder?: string }) {
   return (
     <label className="relative block">
       <Search className="pointer-events-none absolute left-4 top-3.5 h-4 w-4 text-muted-foreground" />
@@ -321,6 +457,13 @@ function handleMutationError(error: unknown, fallback: string) {
 }
 
 function toQuestionPayload(values: QuestionFormValues): QuestionUpsertRequest {
+  const isNumeric = values.answerKind === 'Numeric'
+  const isNormalizedText = values.answerKind === 'NormalizedText'
+  const acceptedAnswers = (values.acceptedAnswersText ?? '')
+    .split('\n')
+    .map((item) => item.trim())
+    .filter(Boolean)
+
   return {
     tagId: values.tagId,
     title: values.title.trim(),
@@ -333,16 +476,13 @@ function toQuestionPayload(values: QuestionFormValues): QuestionUpsertRequest {
     supportNotes: normalizeOptional(values.supportNotes),
     answerSchema: {
       kind: values.answerKind,
-      acceptedAnswers: (values.acceptedAnswersText ?? '')
-        .split('\n')
-        .map((item) => item.trim())
-        .filter(Boolean),
-      expectedNumericValue: normalizeOptional(values.expectedNumericValue) ? Number(values.expectedNumericValue) : null,
-      numericTolerance: normalizeOptional(values.numericTolerance) ? Number(values.numericTolerance) : null,
-      trimWhitespace: values.trimWhitespace,
-      ignoreCase: values.ignoreCase,
-      collapseInnerWhitespace: values.collapseInnerWhitespace,
-      removePunctuation: values.removePunctuation,
+      acceptedAnswers: isNumeric ? [] : acceptedAnswers,
+      expectedNumericValue: isNumeric && normalizeOptional(values.expectedNumericValue) ? Number(values.expectedNumericValue) : null,
+      numericTolerance: isNumeric && normalizeOptional(values.numericTolerance) ? Number(values.numericTolerance) : null,
+      trimWhitespace: isNormalizedText ? values.trimWhitespace : false,
+      ignoreCase: isNormalizedText ? values.ignoreCase : false,
+      collapseInnerWhitespace: isNormalizedText ? values.collapseInnerWhitespace : false,
+      removePunctuation: isNormalizedText ? values.removePunctuation : false,
     },
   }
 }
@@ -430,7 +570,7 @@ function toPoolPayload(values: PoolFormValues): QuestionPoolUpsertRequest {
     sortOrder: values.sortOrder,
     entries: values.entries.map((entry, index) => ({
       questionId: entry.questionId,
-      position: entry.position ?? index,
+      position: index,
       isEnabled: entry.isEnabled,
       notes: normalizeOptional(entry.notes),
     })),
@@ -458,7 +598,7 @@ function defaultRoutingForm(tagIds: Id[]): RoutingFormValues {
       activePoolId: '',
       rotationOffset: 0,
       selectionMode: 'PoolSlotRotation',
-      isEnabled: true,
+      isEnabled: false,
     })),
   }
 }
@@ -487,13 +627,17 @@ function toRoutingPayload(values: RoutingFormValues): RoutingProfileUpsertReques
     name: values.name.trim(),
     isActive: values.isActive,
     description: normalizeOptional(values.description),
-    tagStates: values.tagStates.map((state) => ({
-      tagId: state.tagId,
-      activePoolId: normalizeOptional(state.activePoolId),
-      rotationOffset: state.rotationOffset,
-      selectionMode: state.selectionMode,
-      isEnabled: state.isEnabled,
-    })),
+    tagStates: values.tagStates.map((state) => {
+      const activePoolId = normalizeOptional(state.activePoolId)
+
+      return {
+        tagId: state.tagId,
+        activePoolId,
+        rotationOffset: activePoolId ? state.rotationOffset : 0,
+        selectionMode: state.selectionMode,
+        isEnabled: Boolean(activePoolId),
+      }
+    }),
   }
 }
 
@@ -508,7 +652,7 @@ function enigmaProfileToForm(profile: EnigmaProfileResponse): EnigmaFormValues {
     rotors: profile.rotors.map((rotor) => ({
       tagId: rotor.tagId,
       label: rotor.label,
-      colorOverride: '',
+      colorOverride: rotor.colorOverride ?? '',
       displayOrder: rotor.displayOrder,
       positionMin: rotor.positionMin,
       positionMax: rotor.positionMax,
@@ -539,11 +683,11 @@ function toEnigmaPayload(values: EnigmaFormValues): EnigmaProfileUpsertRequest {
     successMessage: values.successMessage.trim(),
     failureMessage: values.failureMessage.trim(),
     secretCombination: Object.fromEntries(values.rotors.map((rotor) => [rotor.tagId, rotor.secretPosition])),
-    rotors: values.rotors.map((rotor) => ({
+    rotors: values.rotors.map((rotor, index) => ({
       tagId: rotor.tagId,
       label: rotor.label.trim(),
       colorOverride: normalizeOptional(rotor.colorOverride),
-      displayOrder: rotor.displayOrder,
+      displayOrder: index,
       positionMin: rotor.positionMin,
       positionMax: rotor.positionMax,
       isActive: rotor.isActive,
@@ -554,7 +698,7 @@ function toEnigmaPayload(values: EnigmaFormValues): EnigmaProfileUpsertRequest {
 function defaultSettingsForm(settings?: GlobalSettingsResponse): SettingsFormValues {
   return {
     answerCooldownMinutes: settings?.answerCooldownMinutes ?? 5,
-    enigmaCooldownMinutes: settings?.enigmaCooldownMinutes ?? 5,
+    enigmaCooldownMinutes: settings?.enigmaCooldownMinutes ?? 0,
     maxTeamMembers: settings?.maxTeamMembers ?? 4,
     defaultAnswerNormalization: settings?.defaultAnswerNormalization ?? '{"trimWhitespace":true}',
     currentQuestDayStateId: settings?.currentQuestDayStateId ?? '',
@@ -600,7 +744,7 @@ export function AdminDashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <Card>
           <CardHeader>
-            <CardTitle>Маршрутизация</CardTitle>
+            <CardTitle>Ротация</CardTitle>
             <CardDescription>Профилей: {routing.data?.length ?? 0}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2">
@@ -671,7 +815,13 @@ export function AdminTagsPage() {
     },
   })
 
-  const selected = tags.data?.find((item) => item.id === selectedId)
+  const sortedTags = useMemo(
+    () => [...(tags.data ?? [])].sort((left, right) => left.name.localeCompare(right.name, 'ru')),
+    [tags.data],
+  )
+  const selected = sortedTags.find((item) => item.id === selectedId)
+  const watchedColor = form.watch('color')
+  const safeColor = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(watchedColor ?? '') ? watchedColor : '#7c3aed'
 
   useEffect(() => {
     if (selected) {
@@ -708,10 +858,10 @@ export function AdminTagsPage() {
 
   const filtered = useMemo(
     () =>
-      (tags.data ?? []).filter((item) =>
+      sortedTags.filter((item) =>
         `${item.code} ${item.name} ${item.description ?? ''}`.toLowerCase().includes(search.toLowerCase()),
       ),
-    [search, tags.data],
+    [search, sortedTags],
   )
 
   if (tags.isPending) {
@@ -721,8 +871,16 @@ export function AdminTagsPage() {
   return (
     <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
       <div className="space-y-4">
-        <PageHeader title="Теги" description="Цвета и категории вопросов." actions={<Button onClick={() => setSelectedId('new')}>Новый тег</Button>} />
-        <SearchField value={search} onChange={setSearch} placeholder="Filter tags..." />
+        <PageHeader
+          title="Теги"
+          description="Теги задают цвет и смысловую группу вопросов, QR, пулов и роторов Enigma."
+          actions={
+            <Button onClick={() => setSelectedId('new')} disabled={selectedId === 'new'}>
+              Новый тег
+            </Button>
+          }
+        />
+        <SearchField value={search} onChange={setSearch} placeholder="Поиск по тегам..." />
         <div className="space-y-3">
           {filtered.map((tag) => (
             <AdminListCard
@@ -745,17 +903,26 @@ export function AdminTagsPage() {
         <CardContent>
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => saveTag.mutate(values))}>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="Код" error={form.formState.errors.code?.message}>
+              <Field label={labelWithHelp('Код', HELP_TEXTS.tagCode)} error={form.formState.errors.code?.message}>
                 <Input {...form.register('code')} placeholder="red" />
               </Field>
               <Field label="Название" error={form.formState.errors.name?.message}>
                 <Input {...form.register('name')} placeholder="Красный ротор" />
               </Field>
               <Field label="Цвет" error={form.formState.errors.color?.message}>
-                <Input {...form.register('color')} placeholder="#ef4444" />
-              </Field>
-              <Field label="Порядок сортировки" error={form.formState.errors.sortOrder?.message}>
-                <Input type="number" {...form.register('sortOrder')} />
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={safeColor}
+                    onChange={(event) => form.setValue('color', event.target.value, { shouldDirty: true, shouldValidate: true })}
+                    className="h-11 w-16 rounded-2xl border border-border bg-background p-1"
+                  />
+                  <Input
+                    value={watchedColor}
+                    onChange={(event) => form.setValue('color', event.target.value, { shouldDirty: true, shouldValidate: true })}
+                    placeholder="#ef4444"
+                  />
+                </div>
               </Field>
             </div>
             <Field label="Описание" error={form.formState.errors.description?.message}>
@@ -779,16 +946,32 @@ export function AdminQuestionsPage() {
   const questions = useQuery({ queryKey: queryKeys.adminQuestions, queryFn: adminApi.questions })
   const [selectedId, setSelectedId] = useState<Id | 'new'>('new')
   const [search, setSearch] = useState('')
+  const [tagFilter, setTagFilter] = useState('')
+  const [imagePreviewOpen, setImagePreviewOpen] = useState(false)
   const form = useForm<QuestionFormInput, undefined, QuestionFormValues>({
     resolver: zodResolver(questionSchema),
     defaultValues: defaultQuestionForm(),
   })
-
+  const sortedTags = useMemo(
+    () => [...(tags.data ?? [])].sort((left, right) => left.name.localeCompare(right.name, 'ru')),
+    [tags.data],
+  )
   const selected = questions.data?.find((item) => item.id === selectedId)
+  const answerKind = form.watch('answerKind')
+  const currentImageUrl = form.watch('imageUrl')
 
   useEffect(() => {
     form.reset(selected ? questionToForm(selected) : defaultQuestionForm())
   }, [form, selected])
+
+  const uploadQuestionImage = useMutation({
+    mutationFn: (file: File) => adminApi.uploadQuestionImage(file),
+    onSuccess: ({ imageUrl }) => {
+      form.setValue('imageUrl', imageUrl, { shouldDirty: true, shouldValidate: true })
+      toast.success('Изображение загружено')
+    },
+    onError: (error) => handleMutationError(error, 'Не удалось загрузить изображение'),
+  })
 
   const saveQuestion = useMutation({
     mutationFn: (values: QuestionFormValues) => (selected ? adminApi.updateQuestion(selected.id, toQuestionPayload(values)) : adminApi.createQuestion(toQuestionPayload(values))),
@@ -812,10 +995,14 @@ export function AdminQuestionsPage() {
 
   const filtered = useMemo(
     () =>
-      (questions.data ?? []).filter((item) =>
-        `${item.title} ${item.status} ${item.supportNotes ?? ''}`.toLowerCase().includes(search.toLowerCase()),
-      ),
-    [questions.data, search],
+      [...(questions.data ?? [])]
+        .filter((item) => (!tagFilter || item.tagId === tagFilter) && `${item.title} ${item.status} ${item.supportNotes ?? ''}`.toLowerCase().includes(search.toLowerCase()))
+        .sort((left, right) => {
+          const leftTag = sortedTags.find((tag) => tag.id === left.tagId)?.name ?? ''
+          const rightTag = sortedTags.find((tag) => tag.id === right.tagId)?.name ?? ''
+          return `${leftTag} ${left.title}`.localeCompare(`${rightTag} ${right.title}`, 'ru')
+        }),
+    [questions.data, search, sortedTags, tagFilter],
   )
 
   if (tags.isPending || questions.isPending) {
@@ -825,8 +1012,29 @@ export function AdminQuestionsPage() {
   return (
     <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="space-y-4">
-        <PageHeader title="Вопросы" description="Банк вопросов, схема ответов и флаги." actions={<Button onClick={() => setSelectedId('new')}>Новый вопрос</Button>} />
-        <SearchField value={search} onChange={setSearch} placeholder="Filter questions..." />
+        <PageHeader
+          title="Вопросы"
+          description="Банк вопросов, изображения, схема ответов и игровые флаги."
+          actions={
+            <Button onClick={() => setSelectedId('new')} disabled={selectedId === 'new'}>
+              Новый вопрос
+            </Button>
+          }
+        />
+        <div className="grid gap-3 md:grid-cols-[1fr_240px]">
+          <SearchField value={search} onChange={setSearch} placeholder="Поиск по вопросам..." />
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-foreground">Тег</span>
+            <Select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
+              <option value="">Все теги</option>
+              {sortedTags.map((tag) => (
+                <option key={tag.id} value={tag.id}>
+                  {tag.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+        </div>
         <div className="space-y-3">
           {filtered.map((question) => (
             <AdminListCard
@@ -836,7 +1044,17 @@ export function AdminQuestionsPage() {
               isActive={question.isActive}
               selected={selectedId === question.id}
               onSelect={() => setSelectedId(question.id)}
-              badges={<Badge tone={question.isArchived ? 'warning' : 'info'}>{question.status}</Badge>}
+              badges={
+                <>
+                  {sortedTags.find((tag) => tag.id === question.tagId) ? (
+                    <TagChip
+                      name={sortedTags.find((tag) => tag.id === question.tagId)?.name ?? 'Тег'}
+                      color={sortedTags.find((tag) => tag.id === question.tagId)?.color ?? '#64748b'}
+                    />
+                  ) : null}
+                  <Badge tone={question.isArchived ? 'warning' : 'info'}>{questionStatusLabel(question.status)}</Badge>
+                </>
+              }
             />
           ))}
         </div>
@@ -850,22 +1068,22 @@ export function AdminQuestionsPage() {
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => saveQuestion.mutate(values))}>
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Тег" error={form.formState.errors.tagId?.message}>
-                <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('tagId')}>
+                <Select {...form.register('tagId')}>
                   <option value="">Выберите тег</option>
-                  {tags.data?.map((tag) => (
+                  {sortedTags.map((tag) => (
                     <option key={tag.id} value={tag.id}>
                       {tag.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
               <Field label="Статус" error={form.formState.errors.status?.message}>
-                <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('status')}>
+                <Select {...form.register('status')}>
                   <option value="Draft">Черновик</option>
                   <option value="Active">Активен</option>
                   <option value="Disabled">Отключён</option>
                   <option value="Archived">Архив</option>
-                </select>
+                </Select>
               </Field>
             </div>
             <Field label="Заголовок" error={form.formState.errors.title?.message}>
@@ -878,39 +1096,78 @@ export function AdminQuestionsPage() {
               <Textarea rows={4} {...form.register('footerHint')} />
             </Field>
             <div className="grid gap-4 md:grid-cols-2">
-              <Field label="URL изображения" error={form.formState.errors.imageUrl?.message}>
-                <Input {...form.register('imageUrl')} placeholder="https://..." />
+              <Field label="Изображение вопроса" error={form.formState.errors.imageUrl?.message}>
+                <div className="space-y-3">
+                  <Input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={uploadQuestionImage.isPending}
+                    onChange={(event) => {
+                      const file = event.target.files?.[0]
+                      if (!file) {
+                        return
+                      }
+
+                      uploadQuestionImage.mutate(file)
+                      event.target.value = ''
+                    }}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" disabled={!currentImageUrl} onClick={() => setImagePreviewOpen(true)}>
+                      Просмотреть текущее изображение
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={!currentImageUrl}
+                      onClick={() => form.setValue('imageUrl', '', { shouldDirty: true, shouldValidate: true })}
+                    >
+                      Убрать изображение
+                    </Button>
+                  </div>
+                  {uploadQuestionImage.isPending ? <p className="text-xs text-muted-foreground">Загружаю изображение...</p> : null}
+                  {currentImageUrl ? <p className="text-xs text-muted-foreground">{currentImageUrl}</p> : <p className="text-xs text-muted-foreground">Изображение ещё не загружено.</p>}
+                </div>
               </Field>
               <Field label="Заметки для организаторов" error={form.formState.errors.supportNotes?.message}>
-                <Input {...form.register('supportNotes')} placeholder="Внутренние заметки" />
+                <Textarea rows={4} {...form.register('supportNotes')} placeholder="Внутренние заметки для команды организаторов" />
               </Field>
             </div>
             <Divider />
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Тип ответа" error={form.formState.errors.answerKind?.message}>
-                <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('answerKind')}>
+                <Select {...form.register('answerKind')}>
                   <option value="ExactText">Точный текст</option>
-                  <option value="NormalizedText">NormalizedText</option>
+                  <option value="NormalizedText">Текст с нормализацией</option>
                   <option value="Numeric">Число</option>
-                </select>
+                </Select>
               </Field>
-              <Field label="Правильные ответы" hint="Один ответ на строку" error={form.formState.errors.acceptedAnswersText?.message}>
-                <Textarea rows={4} {...form.register('acceptedAnswersText')} />
-              </Field>
-              <Field label="Ожидаемое число" error={form.formState.errors.expectedNumericValue?.message}>
-                <Input {...form.register('expectedNumericValue')} placeholder="42" />
-              </Field>
-              <Field label="Допуск (число)" error={form.formState.errors.numericTolerance?.message}>
-                <Input {...form.register('numericTolerance')} placeholder="0.5" />
-              </Field>
+              {answerKind === 'Numeric' ? (
+                <Field label="Ожидаемое число" error={form.formState.errors.expectedNumericValue?.message}>
+                  <Input {...form.register('expectedNumericValue')} placeholder="42" />
+                </Field>
+              ) : (
+                <Field label="Правильные ответы" hint="Один ответ на строку" error={form.formState.errors.acceptedAnswersText?.message}>
+                  <Textarea rows={4} {...form.register('acceptedAnswersText')} />
+                </Field>
+              )}
+              {answerKind === 'Numeric' ? (
+                <Field label="Допуск" error={form.formState.errors.numericTolerance?.message}>
+                  <Input {...form.register('numericTolerance')} placeholder="0.5" />
+                </Field>
+              ) : null}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <ToggleField label="Вопрос активен" {...form.register('isActive')} checked={form.watch('isActive')} />
-              <ToggleField label="Вопрос в архиве" {...form.register('isArchived')} checked={form.watch('isArchived')} />
-              <ToggleField label="Убирать пробелы по краям" {...form.register('trimWhitespace')} checked={form.watch('trimWhitespace')} />
-              <ToggleField label="Не учитывать регистр" {...form.register('ignoreCase')} checked={form.watch('ignoreCase')} />
-              <ToggleField label="Схлопывать пробелы внутри" {...form.register('collapseInnerWhitespace')} checked={form.watch('collapseInnerWhitespace')} />
-              <ToggleField label="Убирать знаки препинания" {...form.register('removePunctuation')} checked={form.watch('removePunctuation')} />
+              <ToggleField label={labelWithHelp('Вопрос активен', HELP_TEXTS.questionActive)} {...form.register('isActive')} checked={form.watch('isActive')} />
+              <ToggleField label={labelWithHelp('Вопрос в архиве', HELP_TEXTS.questionArchived)} {...form.register('isArchived')} checked={form.watch('isArchived')} />
+              {answerKind === 'NormalizedText' ? (
+                <>
+                  <ToggleField label="Убирать пробелы по краям" {...form.register('trimWhitespace')} checked={form.watch('trimWhitespace')} />
+                  <ToggleField label="Не учитывать регистр" {...form.register('ignoreCase')} checked={form.watch('ignoreCase')} />
+                  <ToggleField label="Схлопывать пробелы внутри" {...form.register('collapseInnerWhitespace')} checked={form.watch('collapseInnerWhitespace')} />
+                  <ToggleField label="Убирать знаки препинания" {...form.register('removePunctuation')} checked={form.watch('removePunctuation')} />
+                </>
+              ) : null}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
               <Button type="submit" disabled={saveQuestion.isPending}>
@@ -920,13 +1177,24 @@ export function AdminQuestionsPage() {
               {selected ? (
                 <Button type="button" variant="outline" onClick={() => duplicateQuestion.mutate(selected.id)} disabled={duplicateQuestion.isPending}>
                   <Copy className="h-4 w-4" />
-                  Duplicate
+                  {duplicateQuestion.isPending ? 'Копирую...' : 'Дублировать'}
                 </Button>
               ) : null}
             </div>
           </form>
         </CardContent>
       </Card>
+      <Modal open={imagePreviewOpen} onClose={() => setImagePreviewOpen(false)} title="Текущее изображение вопроса">
+        {currentImageUrl ? (
+          <img
+            src={currentImageUrl}
+            alt="Изображение вопроса"
+            className="max-h-[70vh] w-full rounded-2xl border border-border object-contain"
+          />
+        ) : (
+          <p className="text-sm text-muted-foreground">Изображение не загружено.</p>
+        )}
+      </Modal>
     </section>
   )
 }
@@ -937,15 +1205,24 @@ export function AdminPoolsPage() {
   const questions = useQuery({ queryKey: queryKeys.adminQuestions, queryFn: adminApi.questions })
   const pools = useQuery({ queryKey: queryKeys.adminPools, queryFn: adminApi.pools })
   const [selectedId, setSelectedId] = useState<Id | 'new'>('new')
+  const [search, setSearch] = useState('')
+  const [tagFilter, setTagFilter] = useState('')
   const form = useForm<PoolFormInput, undefined, PoolFormValues>({
     resolver: zodResolver(poolSchema),
     defaultValues: defaultPoolForm(),
   })
   const entriesArray = useFieldArray({ control: form.control, name: 'entries' })
   const selected = pools.data?.find((item) => item.id === selectedId)
+  const sortedTags = useMemo(
+    () => [...(tags.data ?? [])].sort((left, right) => left.name.localeCompare(right.name, 'ru')),
+    [tags.data],
+  )
   const currentTagId = form.watch('tagId')
   const availableQuestions = useMemo(
-    () => (questions.data ?? []).filter((item) => (currentTagId ? item.tagId === currentTagId : true)),
+    () =>
+      [...(questions.data ?? [])]
+        .filter((item) => (currentTagId ? item.tagId === currentTagId : true))
+        .sort((left, right) => left.title.localeCompare(right.title, 'ru')),
     [currentTagId, questions.data],
   )
 
@@ -964,6 +1241,22 @@ export function AdminPoolsPage() {
     onError: (error) => handleMutationError(error, 'Не удалось сохранить пул'),
   })
 
+  const filteredPools = useMemo(
+    () =>
+      [...(pools.data ?? [])]
+        .filter(
+          (pool) =>
+            (!tagFilter || pool.tagId === tagFilter)
+            && `${pool.name} ${pool.description ?? ''}`.toLowerCase().includes(search.toLowerCase()),
+        )
+        .sort((left, right) => {
+          const leftTag = sortedTags.find((tag) => tag.id === left.tagId)?.name ?? ''
+          const rightTag = sortedTags.find((tag) => tag.id === right.tagId)?.name ?? ''
+          return `${leftTag} ${left.name}`.localeCompare(`${rightTag} ${right.name}`, 'ru')
+        }),
+    [pools.data, search, sortedTags, tagFilter],
+  )
+
   if (tags.isPending || questions.isPending || pools.isPending) {
     return <LoadingScreen label="Загружаю пулы..." />
   }
@@ -971,17 +1264,49 @@ export function AdminPoolsPage() {
   return (
     <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="space-y-4">
-        <PageHeader title="Пулы вопросов" description="При сохранении список на сервере полностью заменяется — после правок выполняется обновление." actions={<Button onClick={() => setSelectedId('new')}>Новый пул</Button>} />
+        <PageHeader
+          title="Пулы вопросов"
+          description="Пулы собирают вопросы одного тега и задают их порядок для ротации."
+          actions={
+            <Button onClick={() => setSelectedId('new')} disabled={selectedId === 'new'}>
+              Новый пул
+            </Button>
+          }
+        />
+        <div className="grid gap-3 md:grid-cols-[1fr_240px]">
+          <SearchField value={search} onChange={setSearch} placeholder="Поиск по пулам..." />
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-foreground">Тег</span>
+            <Select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
+              <option value="">Все теги</option>
+              {sortedTags.map((tag) => (
+                <option key={tag.id} value={tag.id}>
+                  {tag.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+        </div>
         <div className="space-y-3">
-          {pools.data?.map((pool) => (
+          {filteredPools.map((pool) => (
             <AdminListCard
               key={pool.id}
               title={pool.name}
-              description={`${pool.entries.length} entries`}
+              description={`${pool.entries.length} записей`}
               isActive={pool.isActive}
               selected={selectedId === pool.id}
               onSelect={() => setSelectedId(pool.id)}
-              badges={<Badge tone={pool.isArchived ? 'warning' : 'default'}>{pool.isArchived ? 'Archived' : 'Live'}</Badge>}
+              badges={
+                <>
+                  {sortedTags.find((tag) => tag.id === pool.tagId) ? (
+                    <TagChip
+                      name={sortedTags.find((tag) => tag.id === pool.tagId)?.name ?? 'Тег'}
+                      color={sortedTags.find((tag) => tag.id === pool.tagId)?.color ?? '#64748b'}
+                    />
+                  ) : null}
+                  <Badge tone={pool.isArchived ? 'warning' : 'default'}>{pool.isArchived ? 'Архив' : 'Рабочий'}</Badge>
+                </>
+              }
             />
           ))}
         </div>
@@ -989,23 +1314,20 @@ export function AdminPoolsPage() {
       <Card>
         <CardHeader>
           <CardTitle>{selected ? 'Редактировать пул' : 'Новый пул'}</CardTitle>
-          <CardDescription>Порядок элементов: поле позиции и кнопки вверх/вниз.</CardDescription>
+          <CardDescription>Порядок элементов меняется только кнопками «Вверх» и «Вниз».</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => savePool.mutate(values))}>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-1">
               <Field label="Тег" error={form.formState.errors.tagId?.message}>
-                <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('tagId')}>
+                <Select {...form.register('tagId')}>
                   <option value="">Выберите тег</option>
-                  {tags.data?.map((tag) => (
+                  {sortedTags.map((tag) => (
                     <option key={tag.id} value={tag.id}>
                       {tag.name}
                     </option>
                   ))}
-                </select>
-              </Field>
-              <Field label="Порядок сортировки" error={form.formState.errors.sortOrder?.message}>
-                <Input type="number" {...form.register('sortOrder')} />
+                </Select>
               </Field>
             </div>
             <Field label="Название" error={form.formState.errors.name?.message}>
@@ -1015,13 +1337,13 @@ export function AdminPoolsPage() {
               <Textarea rows={4} {...form.register('description')} />
             </Field>
             <div className="grid gap-3 md:grid-cols-2">
-              <ToggleField label="Пул активен" {...form.register('isActive')} checked={form.watch('isActive')} />
-              <ToggleField label="Пул в архиве" {...form.register('isArchived')} checked={form.watch('isArchived')} />
+              <ToggleField label={labelWithHelp('Пул активен', HELP_TEXTS.poolActive)} {...form.register('isActive')} checked={form.watch('isActive')} />
+              <ToggleField label={labelWithHelp('Пул в архиве', HELP_TEXTS.poolArchived)} {...form.register('isArchived')} checked={form.watch('isArchived')} />
             </div>
             <Divider />
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="font-semibold text-foreground">Записи</h3>
+                <h3 className="font-semibold text-foreground">Записи пула</h3>
                 <Button
                   type="button"
                   variant="outline"
@@ -1034,7 +1356,7 @@ export function AdminPoolsPage() {
                     })
                   }
                 >
-                  Добавить entry
+                  Добавить вопрос
                 </Button>
               </div>
               {entriesArray.fields.length === 0 ? (
@@ -1044,32 +1366,41 @@ export function AdminPoolsPage() {
                   <div key={field.id} className="rounded-3xl border border-border bg-background/70 p-4">
                     <div className="grid gap-4 md:grid-cols-2">
                       <Field label="Вопрос">
-                        <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register(`entries.${index}.questionId`)}>
+                        <Select {...form.register(`entries.${index}.questionId`)}>
                           <option value="">Выберите вопрос</option>
                           {availableQuestions.map((question) => (
                             <option key={question.id} value={question.id}>
                               {question.title}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       </Field>
-                      <Field label="Позиция">
-                        <Input type="number" {...form.register(`entries.${index}.position`)} />
+                      <Field label="Позиция вопроса" hint="Это место в порядке пула. Оно меняется кнопками ниже.">
+                        <Input value={String(index + 1)} readOnly />
                       </Field>
                     </div>
                     <Field label="Заметки">
                       <Input {...form.register(`entries.${index}.notes`)} />
                     </Field>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <ToggleField label="Включён" {...form.register(`entries.${index}.isEnabled`)} checked={form.watch(`entries.${index}.isEnabled`)} />
-                      <Button type="button" variant="outline" onClick={() => index > 0 && entriesArray.swap(index, index - 1)}>
-                        Up
+                      <ToggleField
+                        label={labelWithHelp('Запись включена', HELP_TEXTS.poolEntryEnabled)}
+                        {...form.register(`entries.${index}.isEnabled`)}
+                        checked={form.watch(`entries.${index}.isEnabled`)}
+                      />
+                      <Button type="button" variant="outline" onClick={() => index > 0 && entriesArray.swap(index, index - 1)} disabled={index === 0}>
+                        Вверх
                       </Button>
-                      <Button type="button" variant="outline" onClick={() => index < entriesArray.fields.length - 1 && entriesArray.swap(index, index + 1)}>
-                        Down
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => index < entriesArray.fields.length - 1 && entriesArray.swap(index, index + 1)}
+                        disabled={index === entriesArray.fields.length - 1}
+                      >
+                        Вниз
                       </Button>
                       <Button type="button" variant="danger" onClick={() => entriesArray.remove(index)}>
-                        Remove
+                        Удалить
                       </Button>
                     </div>
                   </div>
@@ -1091,12 +1422,18 @@ export function AdminQrPage() {
   const tags = useQuery({ queryKey: queryKeys.adminTags, queryFn: adminApi.tags })
   const qrCodes = useQuery({ queryKey: queryKeys.adminQr, queryFn: adminApi.qrCodes })
   const [selectedId, setSelectedId] = useState<Id | 'new'>('new')
+  const [search, setSearch] = useState('')
+  const [tagFilter, setTagFilter] = useState('')
   const form = useForm<QrFormInput, undefined, QrFormValues>({
     resolver: zodResolver(qrSchema),
     defaultValues: defaultQrForm(),
   })
   const selected = qrCodes.data?.find((item) => item.id === selectedId)
   const watchedSlug = form.watch('slug')
+  const sortedTags = useMemo(
+    () => [...(tags.data ?? [])].sort((left, right) => left.name.localeCompare(right.name, 'ru')),
+    [tags.data],
+  )
 
   useEffect(() => {
     form.reset(
@@ -1138,14 +1475,48 @@ export function AdminQrPage() {
     return <LoadingScreen label="Загружаю QR..." />
   }
 
+  const filteredQrCodes = [...(qrCodes.data ?? [])]
+    .filter(
+      (qrCode) =>
+        (!tagFilter || qrCode.tagId === tagFilter)
+        && `${qrCode.label} ${qrCode.slug} ${qrCode.notes ?? ''}`.toLowerCase().includes(search.toLowerCase()),
+    )
+    .sort((left, right) => {
+      const leftTag = sortedTags.find((tag) => tag.id === left.tagId)?.name ?? ''
+      const rightTag = sortedTags.find((tag) => tag.id === right.tagId)?.name ?? ''
+      return `${leftTag} ${left.label}`.localeCompare(`${rightTag} ${right.label}`, 'ru')
+    })
+
   const browserRoute = watchedSlug ? `/q/${watchedSlug}` : '/q/{slug}'
 
   return (
     <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="space-y-4">
-        <PageHeader title="QR-коды" description="Slug, слот и предпросмотр для печати." actions={<Button onClick={() => setSelectedId('new')}>Новый QR</Button>} />
+        <PageHeader
+          title="QR-коды"
+          description="QR связывают физические точки маршрута с текущей ротацией вопросов."
+          actions={
+            <Button onClick={() => setSelectedId('new')} disabled={selectedId === 'new'}>
+              Новый QR
+            </Button>
+          }
+        />
+        <div className="grid gap-3 md:grid-cols-[1fr_240px]">
+          <SearchField value={search} onChange={setSearch} placeholder="Поиск по QR..." />
+          <label className="space-y-2">
+            <span className="text-sm font-medium text-foreground">Тег</span>
+            <Select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)}>
+              <option value="">Все теги</option>
+              {sortedTags.map((tag) => (
+                <option key={tag.id} value={tag.id}>
+                  {tag.name}
+                </option>
+              ))}
+            </Select>
+          </label>
+        </div>
         <div className="space-y-3">
-          {qrCodes.data?.map((qrCode) => (
+          {filteredQrCodes.map((qrCode) => (
             <AdminListCard
               key={qrCode.id}
               title={qrCode.label}
@@ -1153,7 +1524,17 @@ export function AdminQrPage() {
               isActive={qrCode.isActive}
               selected={selectedId === qrCode.id}
               onSelect={() => setSelectedId(qrCode.id)}
-              badges={<Badge>Slot {qrCode.slotIndex}</Badge>}
+              badges={
+                <>
+                  {sortedTags.find((tag) => tag.id === qrCode.tagId) ? (
+                    <TagChip
+                      name={sortedTags.find((tag) => tag.id === qrCode.tagId)?.name ?? 'Тег'}
+                      color={sortedTags.find((tag) => tag.id === qrCode.tagId)?.color ?? '#64748b'}
+                    />
+                  ) : null}
+                  <Badge>Слот {qrCode.slotIndex}</Badge>
+                </>
+              }
             />
           ))}
         </div>
@@ -1162,22 +1543,22 @@ export function AdminQrPage() {
         <Card>
           <CardHeader>
             <CardTitle>{selected ? 'Редактировать QR' : 'Новый QR'}</CardTitle>
-          <CardDescription>Участники открывают QR по адресу /q/:slug.</CardDescription>
+            <CardDescription>Участники открывают QR по адресу `/q/:slug`.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={form.handleSubmit((values) => saveQr.mutate(values))}>
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label="Тег" error={form.formState.errors.tagId?.message}>
-                  <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('tagId')}>
+                  <Select {...form.register('tagId')}>
                     <option value="">Выберите тег</option>
-                    {tags.data?.map((tag) => (
+                    {sortedTags.map((tag) => (
                       <option key={tag.id} value={tag.id}>
                         {tag.name}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </Field>
-                <Field label="Индекс слота" error={form.formState.errors.slotIndex?.message}>
+                <Field label={labelWithHelp('Индекс слота', HELP_TEXTS.qrSlotIndex)} error={form.formState.errors.slotIndex?.message}>
                   <Input type="number" {...form.register('slotIndex')} />
                 </Field>
               </div>
@@ -1190,7 +1571,7 @@ export function AdminQrPage() {
               <Field label="Заметки" error={form.formState.errors.notes?.message}>
                 <Textarea rows={4} {...form.register('notes')} />
               </Field>
-              <ToggleField label="QR активен" {...form.register('isActive')} checked={form.watch('isActive')} />
+              <ToggleField label={labelWithHelp('QR активен', HELP_TEXTS.qrActive)} {...form.register('isActive')} checked={form.watch('isActive')} />
               <Button type="submit" className="w-full" disabled={saveQr.isPending}>
                 {saveQr.isPending ? 'Сохранение...' : selected ? 'Сохранить QR' : 'Создать QR'}
               </Button>
@@ -1200,7 +1581,7 @@ export function AdminQrPage() {
         <Card>
           <CardHeader>
             <CardTitle>Предпросмотр QR</CardTitle>
-            <CardDescription>Client-side generated QR code pointing to the frontend browser route.</CardDescription>
+            <CardDescription>QR формируется на клиенте и ведёт на страницу сканирования во фронтенде.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex justify-center rounded-3xl border border-border bg-white p-6">
@@ -1243,6 +1624,11 @@ export function AdminRoutingPage() {
   })
 
   const selected = profiles.data?.find((item) => item.id === selectedId)
+  const sortedTags = useMemo(
+    () => [...(tags.data ?? [])].sort((left, right) => left.name.localeCompare(right.name, 'ru')),
+    [tags.data],
+  )
+  const questionById = useMemo(() => new Map((questions.data ?? []).map((question) => [question.id, question])), [questions.data])
 
   useEffect(() => {
     const tagIds = (tags.data ?? []).map((tag) => tag.id)
@@ -1252,33 +1638,23 @@ export function AdminRoutingPage() {
   const saveProfile = useMutation({
     mutationFn: (values: RoutingFormValues) => (selected ? adminApi.updateRoutingProfile(selected.id, toRoutingPayload(values)) : adminApi.createRoutingProfile(toRoutingPayload(values))),
     onSuccess: async (result) => {
-      toast.success(selected ? 'Профиль маршрутизации обновлён' : 'Профиль маршрутизации создан')
+      toast.success(selected ? 'Профиль ротации обновлён' : 'Профиль ротации создан')
       setSelectedId(result.id)
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingProfiles })
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingPreview })
     },
-    onError: (error) => handleMutationError(error, 'Не удалось сохранить профиль маршрутизации'),
+    onError: (error) => handleMutationError(error, 'Не удалось сохранить профиль ротации'),
   })
 
   const activateProfile = useMutation({
     mutationFn: (id: Id) => adminApi.activateRoutingProfile(id),
     onSuccess: async () => {
-      toast.success('Профиль маршрутизации активирован')
+      toast.success('Профиль ротации активирован')
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingProfiles })
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingPreview })
       await queryClient.invalidateQueries({ queryKey: queryKeys.adminSettings })
     },
-    onError: (error) => handleMutationError(error, 'Не удалось активировать профиль маршрутизации'),
-  })
-
-  const rotateTag = useMutation({
-    mutationFn: ({ tagId, step }: { tagId: Id; step: number }) => adminApi.rotateTag(tagId, step),
-    onSuccess: async () => {
-      toast.success('Смещение ротации обновлено')
-      await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingPreview })
-      await queryClient.invalidateQueries({ queryKey: queryKeys.adminRoutingProfiles })
-    },
-    onError: (error) => handleMutationError(error, 'Не удалось повернуть тег'),
+    onError: (error) => handleMutationError(error, 'Не удалось активировать профиль ротации'),
   })
 
   const createOverride = useMutation({
@@ -1321,12 +1697,14 @@ export function AdminRoutingPage() {
 
   return (
     <section className="space-y-6">
-      <PageHeader title="Маршрутизация" description="Профили, матрица превью, ротация пулов и переопределения QR." />
+      <PageHeader title="Ротация" description="Профили, живой предпросмотр и точечные переопределения QR." />
       <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-foreground">Профили</h2>
-            <Button onClick={() => setSelectedId('new')}>Новый profile</Button>
+            <h2 className="text-lg font-semibold text-foreground">Профили ротации</h2>
+            <Button onClick={() => setSelectedId('new')} disabled={selectedId === 'new'}>
+              Новый профиль
+            </Button>
           </div>
           <div className="space-y-3">
             {profiles.data?.map((profile) => (
@@ -1338,8 +1716,8 @@ export function AdminRoutingPage() {
                 selected={selectedId === profile.id}
                 onSelect={() => setSelectedId(profile.id)}
                 badges={
-                  <Button type="button" size="sm" variant="outline" onClick={() => activateProfile.mutate(profile.id)}>
-                    Activate
+                  <Button type="button" size="sm" variant="outline" onClick={() => activateProfile.mutate(profile.id)} disabled={profile.isActive}>
+                    {profile.isActive ? 'Текущий профиль' : 'Сделать текущим'}
                   </Button>
                 }
               />
@@ -1348,8 +1726,8 @@ export function AdminRoutingPage() {
         </div>
         <Card>
           <CardHeader>
-            <CardTitle>{selected ? 'Профиль маршрутизации' : 'Новый профиль'}</CardTitle>
-            <CardDescription>Каждый tag получает свой active pool и rotation offset.</CardDescription>
+            <CardTitle>{selected ? 'Профиль ротации' : 'Новый профиль ротации'}</CardTitle>
+            <CardDescription>Для каждого тега выбирается активный пул и стартовая точка выдачи.</CardDescription>
           </CardHeader>
           <CardContent>
             <form className="space-y-4" onSubmit={form.handleSubmit((values) => saveProfile.mutate(values))}>
@@ -1361,39 +1739,85 @@ export function AdminRoutingPage() {
                   <Input {...form.register('description')} />
                 </Field>
               </div>
-              <ToggleField label="Профиль активен" {...form.register('isActive')} checked={form.watch('isActive')} />
+              <ToggleField label={labelWithHelp('Профиль активен', HELP_TEXTS.rotationProfileActive)} {...form.register('isActive')} checked={form.watch('isActive')} />
               <Divider />
               <div className="space-y-3">
                 {tagStatesArray.fields.map((field, index) => {
-                  const tag = tags.data?.find((item) => item.id === field.tagId)
-                  const tagPools = (pools.data ?? []).filter((item) => item.tagId === field.tagId)
+                  const tag = sortedTags.find((item) => item.id === field.tagId)
+                  const tagPools = [...(pools.data ?? [])]
+                    .filter((item) => item.tagId === field.tagId)
+                    .sort((left, right) => left.name.localeCompare(right.name, 'ru'))
+                  const selectedPoolId = form.watch(`tagStates.${index}.activePoolId`)
+                  const selectedPool = tagPools.find((pool) => pool.id === selectedPoolId)
+                  const availablePoolQuestions = (selectedPool?.entries ?? [])
+                    .slice()
+                    .sort((left, right) => left.position - right.position)
+                    .map((entry) => ({ entry, question: questionById.get(entry.questionId) }))
+                    .filter(
+                      (item): item is { entry: QuestionPoolResponse['entries'][number]; question: QuestionResponse } => Boolean(item.question),
+                    )
+                    .filter(
+                      (item) => item.entry.isEnabled && item.question.isActive && !item.question.isArchived,
+                    )
+                  const rotationChoices = availablePoolQuestions.map((item, questionIndex) => ({
+                    value: String(questionIndex),
+                    label: `Начать с: ${item.question.title}`,
+                  }))
+                  const currentOffset = Number(form.watch(`tagStates.${index}.rotationOffset`) ?? 0)
+                  const normalizedOffset =
+                    rotationChoices.length > 0 ? ((currentOffset % rotationChoices.length) + rotationChoices.length) % rotationChoices.length : 0
+
                   return (
                     <div key={field.id} className="rounded-3xl border border-border bg-background/70 p-4">
                       <div className="flex items-center justify-between gap-3">
                         <TagChip name={tag?.name ?? field.tagId} color={tag?.color ?? '#64748b'} />
-                        <Badge>{form.watch(`tagStates.${index}.selectionMode`)}</Badge>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge>{selectionModeLabel(form.watch(`tagStates.${index}.selectionMode`))}</Badge>
+                          {tag && !tag.isActive ? <Badge tone="warning">Тег выключен глобально</Badge> : null}
+                          {!selectedPoolId ? <Badge tone="warning">Пул не выбран</Badge> : null}
+                        </div>
                       </div>
                       <div className="mt-4 grid gap-4 md:grid-cols-2">
                         <Field label="Активный пул">
-                          <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register(`tagStates.${index}.activePoolId`)}>
+                          <Select {...form.register(`tagStates.${index}.activePoolId`)}>
                             <option value="">Нет активного пула</option>
                             {tagPools.map((pool) => (
                               <option key={pool.id} value={pool.id}>
                                 {pool.name}
                               </option>
                             ))}
-                          </select>
+                          </Select>
                         </Field>
-                        <Field label="Смещение ротации">
-                          <Input type="number" {...form.register(`tagStates.${index}.rotationOffset`)} />
+                        <Field label={labelWithHelp('Смещение ротации', HELP_TEXTS.rotationOffset)}>
+                          <Select
+                            value={rotationChoices.length > 0 ? String(normalizedOffset) : ''}
+                            onChange={(event) =>
+                              form.setValue(`tagStates.${index}.rotationOffset`, Number(event.target.value), {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              })
+                            }
+                            disabled={rotationChoices.length === 0}
+                          >
+                            {rotationChoices.length === 0 ? (
+                              <option value="">{selectedPoolId ? 'В пуле нет доступных вопросов' : 'Сначала выберите пул'}</option>
+                            ) : null}
+                            {rotationChoices.map((choice) => (
+                              <option key={choice.value} value={choice.value}>
+                                {choice.label}
+                              </option>
+                            ))}
+                          </Select>
                         </Field>
                       </div>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <ToggleField label="Состояние тега включено" {...form.register(`tagStates.${index}.isEnabled`)} checked={form.watch(`tagStates.${index}.isEnabled`)} />
-                        <Field label="Режим выбора">
-                          <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register(`tagStates.${index}.selectionMode`)}>
-                            <option value="PoolSlotRotation">PoolSlotRotation</option>
-                          </select>
+                        <Field label="Участие тега">
+                          <Input value={selectedPoolId ? 'Тег участвует через выбранный пул' : 'Тег не участвует в этом профиле'} readOnly />
+                        </Field>
+                        <Field label={labelWithHelp('Режим выбора', HELP_TEXTS.rotationSelectionMode)}>
+                          <Select {...form.register(`tagStates.${index}.selectionMode`)}>
+                            <option value="PoolSlotRotation">Ротация по слотам пула</option>
+                          </Select>
                         </Field>
                       </div>
                     </div>
@@ -1411,8 +1835,11 @@ export function AdminRoutingPage() {
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Предпросмотр маршрутизации</CardTitle>
-            <CardDescription>`GET /api/admin/routing/preview` is the main operational screen to verify live QR resolution.</CardDescription>
+            <CardTitle className="inline-flex items-center gap-2">
+              <span>Предпросмотр ротации</span>
+              <HelpBadge text={HELP_TEXTS.rotationPreview} />
+            </CardTitle>
+            <CardDescription>Показывает, какой вопрос откроет каждый QR по текущей конфигурации.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="overflow-x-auto rounded-3xl border border-border">
@@ -1428,15 +1855,15 @@ export function AdminRoutingPage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {preview.data?.map((row) => {
-                    const tag = tags.data?.find((item) => item.id === row.tagId)
+                    const tag = sortedTags.find((item) => item.id === row.tagId)
                     return (
                       <tr key={row.qrCodeId}>
                         <td className="px-4 py-3 font-medium text-foreground">{row.qrLabel}</td>
                         <td className="px-4 py-3 text-muted-foreground">{row.qrSlug}</td>
                         <td className="px-4 py-3">{tag ? <TagChip name={row.tagName} color={tag.color} /> : row.tagName}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{row.questionTitle ?? 'n/a'}</td>
+                        <td className="px-4 py-3 text-muted-foreground">{row.questionTitle ?? '—'}</td>
                         <td className="px-4 py-3">
-                          <Badge tone={row.resolutionMode.includes('Override') ? 'warning' : 'info'}>{row.resolutionMode}</Badge>
+                          <Badge tone={row.resolutionMode.includes('Override') ? 'warning' : 'info'}>{routingResolutionLabel(row.resolutionMode)}</Badge>
                         </td>
                       </tr>
                     )
@@ -1444,62 +1871,48 @@ export function AdminRoutingPage() {
                 </tbody>
               </table>
             </div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {tags.data?.map((tag) => (
-                <Card key={tag.id} className="p-4">
-                  <CardTitle className="flex items-center justify-between">
-                    <TagChip name={tag.name} color={tag.color} />
-                  </CardTitle>
-                  <div className="mt-4 flex gap-2">
-                    <Button variant="outline" size="sm" onClick={() => rotateTag.mutate({ tagId: tag.id, step: -1 })}>
-                      -1
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => rotateTag.mutate({ tagId: tag.id, step: 1 })}>
-                      +1
-                    </Button>
-                  </div>
-                </Card>
-              ))}
-            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Переопределение QR</CardTitle>
+            <CardTitle className="inline-flex items-center gap-2">
+              <span>Переопределение QR</span>
+              <HelpBadge text={HELP_TEXTS.rotationOverride} />
+            </CardTitle>
             <CardDescription>Удалить из списка можно только переопределения, созданные в этой сессии.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <form className="space-y-4" onSubmit={overrideForm.handleSubmit((values) => createOverride.mutate(values))}>
               <Field label="QR-код">
-                <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...overrideForm.register('qrCodeId')}>
+                <Select {...overrideForm.register('qrCodeId')}>
                   <option value="">Выберите QR</option>
                   {qrCodes.data?.map((qrCode) => (
                     <option key={qrCode.id} value={qrCode.id}>
                       {qrCode.label} ({qrCode.slug})
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
               <Field label="Вопрос">
-                <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...overrideForm.register('questionId')}>
+                <Select {...overrideForm.register('questionId')}>
                   <option value="">Выберите вопрос</option>
                   {questions.data?.map((question) => (
                     <option key={question.id} value={question.id}>
                       {question.title}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
-              <Field label="Профиль области">
-                <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...overrideForm.register('scopeProfileId')}>
+              <Field label="Профиль действия">
+                <Select {...overrideForm.register('scopeProfileId')}>
                   <option value="">Глобальное переопределение</option>
                   {profiles.data?.map((profile) => (
                     <option key={profile.id} value={profile.id}>
                       {profile.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
               <Field label="Причина">
                 <Textarea rows={3} {...overrideForm.register('reason')} />
@@ -1516,11 +1929,11 @@ export function AdminRoutingPage() {
                   <div key={override.id} className="rounded-3xl border border-border bg-background/70 p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div className="space-y-1">
-                        <p className="font-medium text-foreground">Override {override.id}</p>
+                        <p className="font-medium text-foreground">Переопределение {override.id}</p>
                         <p className="text-xs text-muted-foreground">{override.reason || 'Причина не указана'}</p>
                       </div>
                       <Button variant="danger" size="sm" onClick={() => clearOverride.mutate(override.id)}>
-                        Clear
+                        Сбросить
                       </Button>
                     </div>
                   </div>
@@ -1547,6 +1960,10 @@ export function AdminEnigmaPage() {
   })
   const rotorsArray = useFieldArray({ control: form.control, name: 'rotors' })
   const selected = profiles.data?.find((item) => item.id === selectedId)
+  const sortedTags = useMemo(
+    () => [...(tags.data ?? [])].sort((left, right) => left.name.localeCompare(right.name, 'ru')),
+    [tags.data],
+  )
 
   useEffect(() => {
     form.reset(selected ? enigmaProfileToForm(selected) : defaultEnigmaForm())
@@ -1579,19 +1996,27 @@ export function AdminEnigmaPage() {
   return (
     <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="space-y-4">
-        <PageHeader title="Профили Enigma" description="Режим игрока и секретные комбинации." actions={<Button onClick={() => setSelectedId('new')}>Новый профиль</Button>} />
+        <PageHeader
+          title="Профили Enigma"
+          description="Здесь настраиваются роторы, секретная комбинация и единый кулдаун попыток."
+          actions={
+            <Button onClick={() => setSelectedId('new')} disabled={selectedId === 'new'}>
+              Новый профиль
+            </Button>
+          }
+        />
         <div className="space-y-3">
           {profiles.data?.map((profile) => (
             <AdminListCard
               key={profile.id}
               title={profile.name}
-              description={`${profile.rotors.length} rotors`}
+              description={`${profile.rotors.length} роторов`}
               isActive={profile.isActive}
               selected={selectedId === profile.id}
               onSelect={() => setSelectedId(profile.id)}
               badges={
-                <Button size="sm" variant="outline" onClick={() => activateProfile.mutate(profile.id)}>
-                  Activate
+                <Button size="sm" variant="outline" onClick={() => activateProfile.mutate(profile.id)} disabled={profile.isActive}>
+                  {profile.isActive ? 'Текущий профиль' : 'Сделать текущим'}
                 </Button>
               }
             />
@@ -1601,7 +2026,7 @@ export function AdminEnigmaPage() {
       <Card>
         <CardHeader>
           <CardTitle>{selected ? 'Профиль Enigma' : 'Новый профиль Enigma'}</CardTitle>
-          <CardDescription>Каждый ротор привязан к тегу и имеет секретную позицию.</CardDescription>
+            <CardDescription>Кулдаун живой игры берётся из активного профиля Enigma, а не из глобальных настроек.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => saveProfile.mutate(values))}>
@@ -1610,12 +2035,12 @@ export function AdminEnigmaPage() {
                 <Input {...form.register('name')} />
               </Field>
               <Field label="Режим">
-                <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('mode')}>
+                  <Select {...form.register('mode')}>
                   <option value="SimpleCombination">Простая комбинация</option>
                   <option value="HistoricalLike">Исторический</option>
-                </select>
+                  </Select>
               </Field>
-              <Field label="Кулдаун (минуты)">
+                <Field label="Кулдаун попытки (минуты)">
                 <Input type="number" {...form.register('attemptCooldownMinutes')} />
               </Field>
               <ToggleField label="Профиль активен" {...form.register('isActive')} checked={form.watch('isActive')} />
@@ -1662,23 +2087,61 @@ export function AdminEnigmaPage() {
                   <div key={field.id} className="rounded-3xl border border-border bg-background/70 p-4">
                     <div className="grid gap-4 md:grid-cols-2">
                       <Field label="Тег">
-                        <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register(`rotors.${index}.tagId`)}>
+                        <Select {...form.register(`rotors.${index}.tagId`)}>
                           <option value="">Выберите тег</option>
-                          {tags.data?.map((tag) => (
+                          {sortedTags.map((tag) => (
                             <option key={tag.id} value={tag.id}>
                               {tag.name}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       </Field>
                       <Field label="Подпись">
                         <Input {...form.register(`rotors.${index}.label`)} />
                       </Field>
                       <Field label="Переопределение цвета">
-                        <Input {...form.register(`rotors.${index}.colorOverride`)} placeholder="#22c55e" />
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="color"
+                            value={
+                              /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(form.watch(`rotors.${index}.colorOverride`) ?? '')
+                                ? form.watch(`rotors.${index}.colorOverride`)
+                                : '#64748b'
+                            }
+                            onChange={(event) =>
+                              form.setValue(`rotors.${index}.colorOverride`, event.target.value, {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              })
+                            }
+                            className="h-11 w-16 rounded-2xl border border-border bg-background p-1"
+                          />
+                          <Input
+                            value={form.watch(`rotors.${index}.colorOverride`) ?? ''}
+                            onChange={(event) =>
+                              form.setValue(`rotors.${index}.colorOverride`, event.target.value, {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              })
+                            }
+                            placeholder="#22c55e"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() =>
+                              form.setValue(`rotors.${index}.colorOverride`, '', {
+                                shouldDirty: true,
+                                shouldValidate: true,
+                              })
+                            }
+                          >
+                            Очистить
+                          </Button>
+                        </div>
                       </Field>
                       <Field label="Порядок отображения">
-                        <Input type="number" {...form.register(`rotors.${index}.displayOrder`)} />
+                        <Input value={String(index + 1)} readOnly />
                       </Field>
                       <Field label="Позиция мин">
                         <Input type="number" {...form.register(`rotors.${index}.positionMin`)} />
@@ -1691,9 +2154,20 @@ export function AdminEnigmaPage() {
                       </Field>
                       <ToggleField label="Ротор активен" {...form.register(`rotors.${index}.isActive`)} checked={form.watch(`rotors.${index}.isActive`)} />
                     </div>
-                    <div className="mt-3">
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button type="button" variant="outline" onClick={() => index > 0 && rotorsArray.swap(index, index - 1)} disabled={index === 0}>
+                        Вверх
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => index < rotorsArray.fields.length - 1 && rotorsArray.swap(index, index + 1)}
+                        disabled={index === rotorsArray.fields.length - 1}
+                      >
+                        Вниз
+                      </Button>
                       <Button type="button" variant="danger" onClick={() => rotorsArray.remove(index)}>
-                        Remove rotor
+                        Удалить
                       </Button>
                     </div>
                   </div>
@@ -1836,10 +2310,15 @@ export function AdminSettingsPage() {
   const settings = useQuery({ queryKey: queryKeys.adminSettings, queryFn: adminApi.globalSettings })
   const routingProfiles = useQuery({ queryKey: queryKeys.adminRoutingProfiles, queryFn: adminApi.routingProfiles })
   const enigmaProfiles = useQuery({ queryKey: queryKeys.adminEnigmaProfiles, queryFn: adminApi.enigmaProfiles })
+  const questDay = useQuery({ queryKey: queryKeys.adminQuestDay, queryFn: adminApi.questDay })
   const form = useForm<SettingsFormInput, undefined, SettingsFormValues>({
     resolver: zodResolver(settingsSchema),
     defaultValues: defaultSettingsForm(),
   })
+  const watchedTimezone = form.watch('timezone')
+  const timezoneOptions = useMemo(() => buildTimezoneOptions(watchedTimezone), [watchedTimezone])
+  const currentRoutingProfile = routingProfiles.data?.find((profile) => profile.id === settings.data?.currentRoutingProfileId)
+  const currentEnigmaProfile = enigmaProfiles.data?.find((profile) => profile.id === settings.data?.currentEnigmaProfileId)
 
   useEffect(() => {
     form.reset(defaultSettingsForm(settings.data))
@@ -1849,10 +2328,10 @@ export function AdminSettingsPage() {
     mutationFn: (values: SettingsFormValues) =>
       adminApi.updateGlobalSettings({
         answerCooldownMinutes: values.answerCooldownMinutes,
-        enigmaCooldownMinutes: values.enigmaCooldownMinutes,
+        enigmaCooldownMinutes: settings.data?.enigmaCooldownMinutes ?? values.enigmaCooldownMinutes,
         maxTeamMembers: values.maxTeamMembers,
         defaultAnswerNormalization: values.defaultAnswerNormalization,
-        currentQuestDayStateId: normalizeOptional(values.currentQuestDayStateId),
+        currentQuestDayStateId: settings.data?.currentQuestDayStateId ?? normalizeOptional(values.currentQuestDayStateId),
         currentRoutingProfileId: normalizeOptional(values.currentRoutingProfileId),
         currentEnigmaProfileId: normalizeOptional(values.currentEnigmaProfileId),
         flagsJson: values.flagsJson,
@@ -1865,40 +2344,51 @@ export function AdminSettingsPage() {
     onError: (error) => handleMutationError(error, 'Не удалось обновить настройки'),
   })
 
-  if (settings.isPending || routingProfiles.isPending || enigmaProfiles.isPending) {
+  if (settings.isPending || routingProfiles.isPending || enigmaProfiles.isPending || questDay.isPending) {
     return <LoadingScreen label="Загружаю настройки..." />
   }
 
   return (
     <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
       <div className="space-y-4">
-        <PageHeader title="Глобальные настройки" description="JSON хранится как текст — редактируется в полях ниже." />
+        <PageHeader title="Глобальные настройки" description="Глобальные параметры, технические ссылки и служебные флаги." />
         <Card>
           <CardHeader>
             <CardTitle>Текущие ссылки</CardTitle>
-            <CardDescription>Эти идентификаторы указывают бэкенду на активные объекты конфигурации.</CardDescription>
+            <CardDescription>Здесь показано, какие конфигурации сейчас привязаны к живой игре.</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             <KeyValue label="ID настроек" value={settings.data?.id ?? '—'} />
-            <KeyValue label="Текущий профиль маршрутизации" value={settings.data?.currentRoutingProfileId ?? '—'} />
-            <KeyValue label="Текущий профиль Enigma" value={settings.data?.currentEnigmaProfileId ?? '—'} />
-            <KeyValue label="Текущее состояние игрового дня" value={settings.data?.currentQuestDayStateId ?? '—'} />
+            <KeyValue
+              label="Текущий профиль ротации"
+              value={currentRoutingProfile ? `${currentRoutingProfile.name} · ${currentRoutingProfile.id}` : 'Не выбран'}
+            />
+            <KeyValue
+              label="Текущий профиль Enigma"
+              value={currentEnigmaProfile ? `${currentEnigmaProfile.name} · ${currentEnigmaProfile.id}` : 'Не выбран'}
+            />
+            <KeyValue
+              label="Игровой день"
+              value={questDay.data ? `${questDayStatusLabel(questDay.data.status)} · ${questDay.data.id}` : settings.data?.currentQuestDayStateId ?? '—'}
+            />
           </CardContent>
         </Card>
       </div>
       <Card>
         <CardHeader>
           <CardTitle>Редактирование настроек</CardTitle>
-          <CardDescription>Client-side validation only checks that values exist; semantic JSON correctness should still be reviewed carefully.</CardDescription>
+          <CardDescription>Проверяйте JSON-ввод внимательно: интерфейс проверяет только базовую форму данных.</CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={form.handleSubmit((values) => saveSettings.mutate(values))}>
+            <AlertBox
+              tone="info"
+              title="Кулдаун Enigma"
+              description="Кулдаун попыток Enigma теперь настраивается в активном профиле Enigma. Глобальное поле оставлено только для совместимости."
+            />
             <div className="grid gap-4 md:grid-cols-2">
               <Field label="Кулдаун ответов (минуты)">
                 <Input type="number" {...form.register('answerCooldownMinutes')} />
-              </Field>
-              <Field label="Кулдаун Enigma (минуты)">
-                <Input type="number" {...form.register('enigmaCooldownMinutes')} />
               </Field>
               <Field
                 label="Макс. участников в команде"
@@ -1906,37 +2396,43 @@ export function AdminSettingsPage() {
               >
                 <Input type="number" min={1} max={100} {...form.register('maxTeamMembers')} />
               </Field>
-              <Field label="Профиль маршрутизации">
-                <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('currentRoutingProfileId')}>
+              <Field label="Профиль ротации">
+                <Select {...form.register('currentRoutingProfileId')}>
                   <option value="">Не указано</option>
                   {routingProfiles.data?.map((profile) => (
                     <option key={profile.id} value={profile.id}>
                       {profile.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
               <Field label="Профиль Enigma">
-                <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...form.register('currentEnigmaProfileId')}>
+                <Select {...form.register('currentEnigmaProfileId')}>
                   <option value="">Не указано</option>
                   {enigmaProfiles.data?.map((profile) => (
                     <option key={profile.id} value={profile.id}>
                       {profile.name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </Field>
             </div>
-            <Field label="ID состояния игрового дня">
-              <Input {...form.register('currentQuestDayStateId')} />
+            <Field label={labelWithHelp('ID состояния игрового дня', HELP_TEXTS.settingsQuestDayStateId)}>
+              <Input value={settings.data?.currentQuestDayStateId ?? ''} readOnly />
             </Field>
-            <Field label="Часовой пояс">
-              <Input {...form.register('timezone')} />
+            <Field label={labelWithHelp('Часовой пояс', HELP_TEXTS.settingsTimezone)}>
+              <Select {...form.register('timezone')}>
+                {timezoneOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
             </Field>
             <Field label="Нормализация ответов по умолчанию">
               <Textarea rows={6} {...form.register('defaultAnswerNormalization')} />
             </Field>
-            <Field label="Флаги (JSON)">
+            <Field label={labelWithHelp('Флаги (JSON)', HELP_TEXTS.settingsFlags)} hint="Редактируйте только для редких технических сценариев.">
               <Textarea rows={6} {...form.register('flagsJson')} />
             </Field>
             <Button type="submit" className="w-full" disabled={saveSettings.isPending}>
@@ -2027,7 +2523,7 @@ export function AdminProfilePage() {
     <section className="space-y-6">
       <PageHeader
         title="Профиль администратора"
-        description="Смена логина и пароля. Создание учёток доступно только роли SuperAdmin."
+        description="Смена логина и пароля. Создание учёток доступно только суперадминистратору."
       />
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -2070,14 +2566,11 @@ export function AdminProfilePage() {
                     <Input autoComplete="off" {...createForm.register('login')} />
                   </Field>
                   <Field label="Роль">
-                    <select
-                      className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm"
-                      {...createForm.register('role')}
-                    >
-                      <option value="Editor">Editor</option>
-                      <option value="Support">Support</option>
-                      <option value="SuperAdmin">SuperAdmin</option>
-                    </select>
+                    <Select {...createForm.register('role')}>
+                      <option value="Editor">Редактор</option>
+                      <option value="Support">Поддержка</option>
+                      <option value="SuperAdmin">Суперадмин</option>
+                    </Select>
                   </Field>
                   <Field label="Пароль" error={createForm.formState.errors.password?.message}>
                     <Input type="password" autoComplete="new-password" {...createForm.register('password')} />
@@ -2111,7 +2604,7 @@ export function AdminProfilePage() {
                       <span className="font-medium">{u.login}</span>
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge tone={u.isActive ? 'success' : 'warning'}>{u.isActive ? 'Активен' : 'Выключен'}</Badge>
-                        <Badge>{u.role}</Badge>
+                        <Badge>{adminRoleLabel(u.role)}</Badge>
                       </div>
                       {u.lastLoginAt ? (
                         <span className="w-full text-xs text-muted-foreground">Последний вход: {formatDateTime(u.lastLoginAt)}</span>
@@ -2126,7 +2619,7 @@ export function AdminProfilePage() {
           <Card>
             <CardHeader>
               <CardTitle>Управление администраторами</CardTitle>
-              <CardDescription>Только SuperAdmin может создавать учётки и видеть полный список.</CardDescription>
+              <CardDescription>Только суперадминистратор может создавать учётки и видеть полный список.</CardDescription>
             </CardHeader>
           </Card>
         )}
@@ -2149,7 +2642,7 @@ export function AdminSupportTeamsPage() {
 
   return (
     <section className="space-y-6">
-      <PageHeader title="Команды" description="Ручные операции: открыть вопрос, отметить решённым, отозвать награду." />
+      <PageHeader title="Команды" description="Ручные операции по вопросам команды, участникам и журналу событий." />
       <SearchField value={search} onChange={setSearch} placeholder="Поиск команд..." />
       <div className="grid gap-4 lg:grid-cols-2">
         {filtered.map((team) => (
@@ -2160,7 +2653,7 @@ export function AdminSupportTeamsPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
-                <Badge>{team.status}</Badge>
+                <Badge>{teamStatusLabel(team.status)}</Badge>
                 {team.isLocked ? <Badge tone="warning">Заблокирована</Badge> : null}
                 {team.isDisqualified ? <Badge tone="danger">Дисквалифицирована</Badge> : null}
                 {team.enigmaSolved ? (
@@ -2188,32 +2681,6 @@ export function AdminSupportTeamDetailsPage() {
   const queryClient = useQueryClient()
   const { teamId = '' } = useParams()
   const details = useQuery({ queryKey: queryKeys.adminSupportTeam(teamId), queryFn: () => adminApi.supportTeam(teamId) })
-  const tags = useQuery({ queryKey: queryKeys.adminTags, queryFn: adminApi.tags })
-  const rewardForm = useForm<RewardAdjustInput, undefined, RewardAdjustValues>({
-    resolver: zodResolver(rewardAdjustSchema),
-    defaultValues: {
-      tagId: '',
-      sourceQuestionId: '',
-      revoke: false,
-      rewardType: 'rotor',
-    },
-  })
-
-  const adjustReward = useMutation({
-    mutationFn: (values: RewardAdjustValues) =>
-      adminApi.adjustReward(teamId, {
-        tagId: values.tagId,
-        sourceQuestionId: normalizeOptional(values.sourceQuestionId),
-        revoke: values.revoke,
-        rewardType: values.rewardType,
-      }),
-    onSuccess: async () => {
-      toast.success('Награда скорректирована')
-      await queryClient.invalidateQueries({ queryKey: queryKeys.adminSupportTeam(teamId) })
-    },
-    onError: (error) => handleMutationError(error, 'Не удалось скорректировать награду'),
-  })
-
   const [passwordResetTarget, setPasswordResetTarget] = useState<{ participantId: Id; displayName: string } | null>(null)
   const passwordResetForm = useForm<ParticipantPasswordResetFormValues>({
     resolver: zodResolver(participantPasswordResetSchema),
@@ -2235,7 +2702,7 @@ export function AdminSupportTeamDetailsPage() {
     onError: (error) => handleMutationError(error, 'Не удалось сбросить пароль'),
   })
 
-  if (details.isPending || tags.isPending) {
+  if (details.isPending) {
     return <LoadingScreen label="Загружаю данные команды..." />
   }
 
@@ -2243,42 +2710,83 @@ export function AdminSupportTeamDetailsPage() {
     return <EmptyState title="Команда не найдена" description="Сервер не вернул данные по этой команде." />
   }
 
-  const runQuestionAction = async (questionId: Id, action: 'unlock' | 'solve' | 'revoke-reward') => {
-    const reason = window.prompt(`Reason for ${action}`, '') ?? ''
-    if (!window.confirm(`Run ${action} for this team question?`)) {
+  const runQuestionAction = async (questionId: Id, title: string, action: 'unlock' | 'close' | 'solve' | 'unsolve') => {
+    const actionCopy = {
+      unlock: {
+        prompt: `Причина для журнала при открытии вопроса «${title}» (необязательно):`,
+        confirm: `Открыть вопрос «${title}» для команды?`,
+        success: 'Вопрос открыт',
+      },
+      close: {
+        prompt: `Причина для журнала при закрытии вопроса «${title}» (необязательно):`,
+        confirm: `Закрыть вопрос «${title}»? Если вопрос был решён, решение тоже будет снято.`,
+        success: 'Вопрос закрыт',
+      },
+      solve: {
+        prompt: `Причина для журнала при зачёте решения вопроса «${title}» (необязательно):`,
+        confirm: `Засчитать вопрос «${title}» решённым?`,
+        success: 'Решение засчитано',
+      },
+      unsolve: {
+        prompt: `Причина для журнала при отзыве решения вопроса «${title}» (необязательно):`,
+        confirm: `Отозвать решение для вопроса «${title}»?`,
+        success: 'Решение отозвано',
+      },
+    } as const
+
+    const reason = window.prompt(actionCopy[action].prompt, '')
+    if (reason === null) {
+      return
+    }
+    if (!window.confirm(actionCopy[action].confirm)) {
       return
     }
 
-    if (action === 'unlock') {
-      await adminApi.unlockQuestion(teamId, questionId, { reason })
-    }
+    try {
+      if (action === 'unlock') {
+        await adminApi.unlockQuestion(teamId, questionId, { reason })
+      }
 
-    if (action === 'solve') {
-      await adminApi.solveQuestion(teamId, questionId, { reason })
-    }
+      if (action === 'close') {
+        await adminApi.closeQuestion(teamId, questionId, { reason })
+      }
 
-    if (action === 'revoke-reward') {
-      await adminApi.revokeReward(teamId, questionId, { reason })
-    }
+      if (action === 'solve') {
+        await adminApi.solveQuestion(teamId, questionId, { reason })
+      }
 
-    toast.success('Действие выполнено')
-    await queryClient.invalidateQueries({ queryKey: queryKeys.adminSupportTeam(teamId) })
+      if (action === 'unsolve') {
+        await adminApi.unsolveQuestion(teamId, questionId, { reason })
+      }
+
+      toast.success(actionCopy[action].success)
+      await queryClient.invalidateQueries({ queryKey: queryKeys.adminSupportTeam(teamId) })
+    } catch (error) {
+      handleMutationError(error, 'Не удалось выполнить действие по вопросу')
+    }
   }
 
-  const removeMember = async (membershipId: Id) => {
-    const reason = window.prompt('Reason for removal', '') ?? ''
-    if (!window.confirm('Remove this member from the team?')) {
+  const removeMember = async (membershipId: Id, displayName: string) => {
+    const reason = window.prompt(`Причина исключения участника «${displayName}» (необязательно):`, '')
+    if (reason === null) {
+      return
+    }
+    if (!window.confirm(`Исключить участника «${displayName}» из команды?`)) {
       return
     }
 
-    await adminApi.removeMember(teamId, membershipId, { reason })
-    toast.success('Участник удалён')
-    await queryClient.invalidateQueries({ queryKey: queryKeys.adminSupportTeam(teamId) })
+    try {
+      await adminApi.removeMember(teamId, membershipId, { reason })
+      toast.success('Участник удалён')
+      await queryClient.invalidateQueries({ queryKey: queryKeys.adminSupportTeam(teamId) })
+    } catch (error) {
+      handleMutationError(error, 'Не удалось исключить участника')
+    }
   }
 
   return (
     <section className="space-y-6">
-      <PageHeader title={`Команда: ${details.data.team.name}`} description="Опасные действия требуют подтверждения." />
+      <PageHeader title={`Команда: ${details.data.team.name}`} description="Ручные действия выполняются сразу и попадают в журнал команды." />
       <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
         <div className="space-y-4">
           <Card>
@@ -2288,7 +2796,7 @@ export function AdminSupportTeamDetailsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-2">
-                <Badge>{details.data.team.status}</Badge>
+                <Badge>{teamStatusLabel(details.data.team.status)}</Badge>
                 {details.data.team.isLocked ? <Badge tone="warning">Заблокирована</Badge> : null}
                 {details.data.team.isDisqualified ? <Badge tone="danger">Дисквалифицирована</Badge> : null}
                 {details.data.team.isHidden ? <Badge tone="info">Скрыта</Badge> : null}
@@ -2305,24 +2813,24 @@ export function AdminSupportTeamDetailsPage() {
               <div className="space-y-3">
                 {details.data.team.members.map((member) => (
                   <div key={member.membershipId} className="rounded-2xl border border-border bg-background/70 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex min-w-0 flex-1 items-center gap-3">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="flex min-w-0 flex-1 items-start gap-3">
                         <MemberAvatar displayName={member.displayName} avatarUrl={member.avatarUrl} size="sm" />
-                        <div className="min-w-0">
-                          <p className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+                        <div className="min-w-0 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
                             <span>{member.displayName}</span>
                             {details.data.team.createdByParticipantId &&
                             member.participantId === details.data.team.createdByParticipantId ? (
                               <Badge tone="info">Капитан</Badge>
                             ) : null}
-                          </p>
+                          </div>
                           <p className="text-xs text-muted-foreground">
                             Вступил {formatShortDateTime(member.joinedAt)}
                             {member.provider !== 'local' ? ` · ${member.provider}` : null}
                           </p>
                         </div>
                       </div>
-                      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                      <div className="flex flex-wrap gap-2 lg:justify-end">
                         {member.provider === 'local' ? (
                           <Button
                             variant="outline"
@@ -2335,7 +2843,7 @@ export function AdminSupportTeamDetailsPage() {
                             Сброс пароля
                           </Button>
                         ) : null}
-                        <Button variant="danger" size="sm" onClick={() => removeMember(member.membershipId)}>
+                        <Button variant="danger" size="sm" onClick={() => removeMember(member.membershipId, member.displayName)}>
                           Удалить
                         </Button>
                       </div>
@@ -2376,99 +2884,94 @@ export function AdminSupportTeamDetailsPage() {
               )}
             </CardContent>
           </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Корректировка наград</CardTitle>
-              <CardDescription>Выдача или отзыв награды по тегу.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-4" onSubmit={rewardForm.handleSubmit((values) => adjustReward.mutate(values))}>
-                <Field label="Тег">
-                  <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...rewardForm.register('tagId')}>
-                    <option value="">Выберите тег</option>
-                    {tags.data?.map((tag) => (
-                      <option key={tag.id} value={tag.id}>
-                        {tag.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="ID вопроса-источника">
-                  <select className="flex h-11 w-full rounded-2xl border border-border bg-background px-4 text-sm" {...rewardForm.register('sourceQuestionId')}>
-                    <option value="">Опциональный вопрос-источник</option>
-                    {details.data.questions.map((question) => (
-                      <option key={question.id} value={question.id}>
-                        {question.title}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Тип награды">
-                  <Input {...rewardForm.register('rewardType')} />
-                </Field>
-                <ToggleField label="Отозвать награду (а не выдать)" {...rewardForm.register('revoke')} checked={rewardForm.watch('revoke')} />
-                <Button type="submit" className="w-full" disabled={adjustReward.isPending}>
-                  {adjustReward.isPending ? 'Applying...' : 'Apply reward adjustment'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
         </div>
 
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Открытые вопросы</CardTitle>
-              <CardDescription>Действия по вопросам команды.</CardDescription>
+              <CardTitle>Вопросы</CardTitle>
+              <CardDescription>Все вопросы, доступные по текущей ротации, плюс уже открытые для этой команды.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {details.data.questions.map((question) => (
-                <div key={question.id} className="rounded-3xl border border-border bg-background/70 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="space-y-2">
-                      <p className="font-semibold text-foreground">{question.title}</p>
-                      <div className="flex flex-wrap gap-2">
-                        <TagChip name={question.tagName} color={question.tagColor} />
-                        <Badge tone={question.isSolved ? 'success' : 'info'}>{question.isSolved ? 'Решён' : 'Открыт'}</Badge>
+              {details.data.questions.length === 0 ? (
+                <EmptyState title="Нет доступных вопросов" description="Сейчас для команды нет вопросов по текущей ротации и ранее открытых записей." />
+              ) : (
+                details.data.questions.map((question) => {
+                  const stateMeta = SUPPORT_QUESTION_STATE_META[question.state]
+
+                  return (
+                    <div key={question.id} className="rounded-3xl border border-border bg-background/70 p-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-2">
+                          <p className="font-semibold text-foreground">{question.title}</p>
+                          <div className="flex flex-wrap gap-2">
+                            <TagChip name={question.tagName} color={question.tagColor} />
+                            <Badge tone={stateMeta.tone}>{stateMeta.label}</Badge>
+                            {question.isAvailableNow ? <Badge tone="info">Доступен по текущей ротации</Badge> : null}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {question.state === 'closed' ? (
+                            <Button variant="outline" size="sm" onClick={() => runQuestionAction(question.id, question.title, 'unlock')}>
+                              Открыть
+                            </Button>
+                          ) : null}
+                          {question.state === 'open' ? (
+                            <>
+                              <Button variant="outline" size="sm" onClick={() => runQuestionAction(question.id, question.title, 'solve')}>
+                                Засчитать решённым
+                              </Button>
+                              <Button variant="danger" size="sm" onClick={() => runQuestionAction(question.id, question.title, 'close')}>
+                                Закрыть
+                              </Button>
+                            </>
+                          ) : null}
+                          {question.state === 'solved' ? (
+                            <>
+                              <Button variant="outline" size="sm" onClick={() => runQuestionAction(question.id, question.title, 'unsolve')}>
+                                Отозвать решение
+                              </Button>
+                              <Button variant="danger" size="sm" onClick={() => runQuestionAction(question.id, question.title, 'close')}>
+                                Закрыть
+                              </Button>
+                            </>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                        {question.firstUnlockedAt ? <span>Открыт {formatDateTime(question.firstUnlockedAt)}</span> : null}
+                        {question.lastAttemptAt ? <span>Последняя попытка {formatDateTime(question.lastAttemptAt)}</span> : null}
+                        {question.nextAllowedAnswerAt ? <span>Кулдаун до {formatDateTime(question.nextAllowedAnswerAt)}</span> : null}
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={() => runQuestionAction(question.id, 'unlock')}>
-                        Открыть
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => runQuestionAction(question.id, 'solve')}>
-                        Решён
-                      </Button>
-                      <Button variant="danger" size="sm" onClick={() => runQuestionAction(question.id, 'revoke-reward')}>
-                        Отозвать награду
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="mt-3 text-xs text-muted-foreground">Открыт {formatDateTime(question.firstUnlockedAt)}</p>
-                </div>
-              ))}
+                  )
+                })
+              )}
             </CardContent>
           </Card>
           <Card>
             <CardHeader>
               <CardTitle>Журнал по команде</CardTitle>
-              <CardDescription>Последние записи аудита для этой команды.</CardDescription>
+              <CardDescription>Собран из игровых событий и ручных действий администрации.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {details.data.auditTrail.map((entry) => (
-                <div key={entry.id} className="rounded-3xl border border-border bg-background/70 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="font-medium text-foreground">
-                        {entry.actionType} / {entry.entityType}
-                      </p>
-                      <p className="text-xs text-muted-foreground">{formatDateTime(entry.occurredAt)}</p>
+              {details.data.timeline.length === 0 ? (
+                <EmptyState title="Журнал пуст" description="Для этой команды пока нет зафиксированных событий." />
+              ) : (
+                details.data.timeline.map((entry) => (
+                  <div key={entry.id} className="rounded-3xl border border-border bg-background/70 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-foreground">{entry.title}</p>
+                        <p className="text-xs text-muted-foreground">{formatDateTime(entry.occurredAt)}</p>
+                      </div>
+                      <Badge tone={timelineKindTone(entry.kind)}>{timelineKindLabel(entry.kind)}</Badge>
                     </div>
-                    <Badge>{entry.entityId}</Badge>
+                    <p className="mt-3 text-sm text-muted-foreground">{entry.description}</p>
+                    {entry.reason ? <p className="mt-2 text-xs text-muted-foreground">Причина: {entry.reason}</p> : null}
                   </div>
-                  {entry.reason ? <p className="mt-3 text-sm text-muted-foreground">{entry.reason}</p> : null}
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </div>

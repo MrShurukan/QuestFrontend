@@ -24,6 +24,7 @@ import type {
   QrCodeUpsertRequest,
   QrResolutionResponse,
   QuestionDetailsResponse,
+  QuestionImageUploadResponse,
   QuestionPoolResponse,
   QuestionPoolUpsertRequest,
   QuestionResponse,
@@ -291,6 +292,14 @@ export const adminApi = {
       body: json(payload),
     })
   },
+  uploadQuestionImage(file: File) {
+    const body = new FormData()
+    body.append('image', file)
+    return request<QuestionImageUploadResponse>('/api/admin/questions/upload-image', {
+      method: 'POST',
+      body,
+    })
+  },
   updateQuestion(id: Id, payload: QuestionUpsertRequest) {
     return request<QuestionResponse>(`/api/admin/questions/${id}`, {
       method: 'PUT',
@@ -433,6 +442,18 @@ export const adminApi = {
   },
   solveQuestion(teamId: Id, questionId: Id, payload: TeamQuestionAdjustmentRequest) {
     return request<void>(`/api/admin/support/teams/${teamId}/questions/${questionId}/solve`, {
+      method: 'POST',
+      body: json(payload),
+    })
+  },
+  closeQuestion(teamId: Id, questionId: Id, payload: TeamQuestionAdjustmentRequest) {
+    return request<void>(`/api/admin/support/teams/${teamId}/questions/${questionId}/close`, {
+      method: 'POST',
+      body: json(payload),
+    })
+  },
+  unsolveQuestion(teamId: Id, questionId: Id, payload: TeamQuestionAdjustmentRequest) {
+    return request<void>(`/api/admin/support/teams/${teamId}/questions/${questionId}/unsolve`, {
       method: 'POST',
       body: json(payload),
     })

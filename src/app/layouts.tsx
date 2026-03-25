@@ -39,7 +39,7 @@ const adminNavItems = [
   { to: '/admin/questions', label: 'Вопросы', icon: ShieldQuestion },
   { to: '/admin/pools', label: 'Пулы', icon: ListChecks },
   { to: '/admin/qr', label: 'QR', icon: QrCode },
-  { to: '/admin/routing', label: 'Маршрутизация', icon: ArrowLeftRight },
+  { to: '/admin/routing', label: 'Ротация', icon: ArrowLeftRight },
   { to: '/admin/enigma', label: 'Enigma', icon: DatabaseZap },
   { to: '/admin/quest-day', label: 'Игровой день', icon: Activity },
   { to: '/admin/settings', label: 'Настройки', icon: Settings },
