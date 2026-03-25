@@ -2812,13 +2812,12 @@ export function AdminSupportTeamDetailsPage() {
               </div>
               <div className="space-y-3">
                 {details.data.team.members.map((member) => (
-                  <div key={member.membershipId} className="rounded-2xl border border-border bg-background/70 p-4">
-                    <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <div key={member.membershipId} className="rounded-2xl border border-border bg-background/70 p-4 sm:p-5">
+                    <div className="flex min-w-0 items-start gap-3">
                         <MemberAvatar displayName={member.displayName} avatarUrl={member.avatarUrl} size="sm" />
-                        <div className="min-w-0 space-y-1">
-                          <div className="flex flex-wrap items-center gap-2 font-medium text-foreground">
-                            <span>{member.displayName}</span>
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex flex-wrap items-start gap-2 font-medium text-foreground">
+                            <span className="min-w-0 break-words">{member.displayName}</span>
                             {details.data.team.createdByParticipantId &&
                             member.participantId === details.data.team.createdByParticipantId ? (
                               <Badge tone="info">Капитан</Badge>
@@ -2830,11 +2829,12 @@ export function AdminSupportTeamDetailsPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="flex flex-wrap gap-2 lg:justify-end">
+                    <div className="mt-4 flex min-h-10 flex-wrap gap-2 sm:justify-end">
                         {member.provider === 'local' ? (
                           <Button
                             variant="outline"
                             size="sm"
+                            className="shrink-0"
                             onClick={() => {
                               passwordResetForm.reset({ newPassword: '', confirmPassword: '', reason: '' })
                               setPasswordResetTarget({ participantId: member.participantId, displayName: member.displayName })
@@ -2843,10 +2843,9 @@ export function AdminSupportTeamDetailsPage() {
                             Сброс пароля
                           </Button>
                         ) : null}
-                        <Button variant="danger" size="sm" onClick={() => removeMember(member.membershipId, member.displayName)}>
+                        <Button variant="danger" size="sm" className="shrink-0" onClick={() => removeMember(member.membershipId, member.displayName)}>
                           Удалить
                         </Button>
-                      </div>
                     </div>
                   </div>
                 ))}

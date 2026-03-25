@@ -210,7 +210,7 @@ export function HelpBadge({
           id={panelId}
           role="dialog"
           aria-label={title}
-          className="absolute left-0 top-full z-20 mt-2 w-80 max-w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-border bg-popover p-3 text-left shadow-xl"
+          className="absolute left-0 top-full z-50 mt-2 w-80 max-w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-border bg-card p-3 text-left opacity-100 shadow-2xl ring-1 ring-black/5"
         >
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
           <div className="mt-1 text-sm text-foreground">{text}</div>

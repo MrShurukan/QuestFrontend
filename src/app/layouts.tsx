@@ -198,8 +198,8 @@ export function PlayerShell() {
 export function AdminShell() {
   return (
     <main className="min-h-screen bg-muted/30">
-      <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 lg:px-8">
-        <div className="grid gap-6 xl:grid-cols-[260px_1fr]">
+      <div className="w-full px-3 py-4 md:px-4 lg:px-5 xl:px-6">
+        <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(0,1fr)]">
           <aside className="space-y-4">
             <div className="rounded-3xl border border-border bg-card p-4 shadow-sm">
               <NavLink to="/" className="text-lg font-semibold tracking-tight text-foreground">
@@ -216,7 +216,7 @@ export function AdminShell() {
               </div>
             </nav>
           </aside>
-          <section className="space-y-6">
+          <section className="min-w-0 space-y-6">
             <Outlet />
           </section>
         </div>
