@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import { WandSparkles } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { toast } from 'sonner'
 
 import { RotorWheel } from '@/features/player/enigma/RotorWheel'
@@ -11,6 +11,7 @@ import { describeEnigmaAttemptResult, isApiError, participantApi } from '@/share
 import {
   type EnigmaStateResponse,
   type SubmitEnigmaAttemptResponse,
+  type TeamSummaryResponse,
   queryKeys,
 } from '@/shared/contracts/api'
 import {
@@ -22,7 +23,7 @@ import {
   CardHeader,
   CardTitle,
   CooldownAlertBox,
-  StatCard,
+  Modal,
 } from '@/shared/ui/ui'
 
 const EXIT_MS = 420
@@ -48,6 +49,8 @@ export function EnigmaPlayerExperience({
   effectivePositions,
   setDeltas,
   saveDraft,
+  teamSummary,
+  participantId,
 }: {
   state: EnigmaStateResponse
   effectivePositions: Record<string, number>
@@ -56,8 +59,14 @@ export function EnigmaPlayerExperience({
     mutate: (positions: Record<string, number>) => void
     isPending: boolean
   }
+  teamSummary: TeamSummaryResponse
+  participantId: string
 }) {
   const queryClient = useQueryClient()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
   const [scene, setScene] = useState<Scene>(() => (state.isEnigmaSolved ? 'solved_persistent' : 'idle'))
   const [paperTarget, setPaperTarget] = useState(() => state.solvedRevealMessage ?? '')
   const [typedLen, setTypedLen] = useState(() => (state.isEnigmaSolved ? (state.solvedRevealMessage ?? '').length : 0))
@@ -112,6 +121,49 @@ export function EnigmaPlayerExperience({
     mutationFn: (positions: Record<string, number>) =>
       participantApi.submitEnigmaAttempt({ rotorPositions: positions }),
   })
+
+  const uploadPhoto = useMutation({
+    mutationFn: (file: File) => participantApi.uploadFinalTaskPhoto(file),
+    onSuccess: async () => {
+      toast.success('Фотография отправлена')
+      await queryClient.invalidateQueries({ queryKey: queryKeys.teamsMe })
+      setConfirmOpen(false)
+      setPendingFile(null)
+      setPreviewUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev)
+        return null
+      })
+    },
+    onError: (error) => {
+      toast.error(isApiError(error) ? error.message : 'Не удалось отправить фотографию')
+    },
+  })
+
+  const isCaptain = Boolean(
+    teamSummary.createdByParticipantId && participantId && teamSummary.createdByParticipantId === participantId,
+  )
+  const finalPhotoDone = Boolean(teamSummary.finalTaskPhotoUploadedAt || teamSummary.finalTaskPhotoUrl)
+
+  const closePhotoConfirm = () => {
+    setConfirmOpen(false)
+    setPendingFile(null)
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return null
+    })
+  }
+
+  const onFinalPhotoSelected = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setPendingFile(file)
+    setPreviewUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev)
+      return URL.createObjectURL(file)
+    })
+    setConfirmOpen(true)
+  }
 
   const runPaperFlow = useCallback(
     async (r: SubmitEnigmaAttemptResponse, signal: AbortSignal) => {
@@ -319,7 +371,34 @@ export function EnigmaPlayerExperience({
       </div>
 
       <div className="space-y-4">
-        <StatCard label="Режим" value={state.mode} hint={`Кулдаун: ${state.attemptCooldownMinutes} мин.`} />
+        {state.isEnigmaSolved ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Последнее задание</CardTitle>
+              <CardDescription>После успешной расшифровки Enigma капитан команды может выгрузить одну фотографию.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {finalPhotoDone ? (
+                <p className="text-sm text-muted-foreground">Фотография отправлена организаторам.</p>
+              ) : isCaptain ? (
+                <>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    onChange={onFinalPhotoSelected}
+                  />
+                  <Button type="button" className="w-full" variant="secondary" onClick={() => fileInputRef.current?.click()}>
+                    Загрузить фотографию
+                  </Button>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Загрузить фото может капитан команды.</p>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
         {!state.isEnigmaSolved && scene !== 'solved_persistent' ? (
           <Card>
             <CardHeader>
@@ -365,6 +444,35 @@ export function EnigmaPlayerExperience({
           </Card>
         )}
       </div>
+
+      <Modal
+        open={confirmOpen}
+        onClose={closePhotoConfirm}
+        title="Подтвердите отправку"
+        footer={
+          <div className="flex w-full flex-wrap justify-end gap-2">
+            <Button type="button" variant="outline" onClick={closePhotoConfirm} disabled={uploadPhoto.isPending}>
+              Отмена
+            </Button>
+            <Button
+              type="button"
+              onClick={() => {
+                if (pendingFile) void uploadPhoto.mutateAsync(pendingFile)
+              }}
+              disabled={!pendingFile || uploadPhoto.isPending}
+            >
+              {uploadPhoto.isPending ? 'Отправка...' : 'Отправить'}
+            </Button>
+          </div>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Вы уверены, что хотите выгрузить эту фотографию? Вы можете выгрузить только одну фотографию.
+        </p>
+        {previewUrl ? (
+          <img src={previewUrl} alt="" className="mt-4 max-h-64 w-full rounded-xl border border-border object-contain" />
+        ) : null}
+      </Modal>
     </div>
   )
 }

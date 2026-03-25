@@ -120,6 +120,10 @@ export interface TeamSummaryResponse {
   /** Denormalized flag; absent on older API payloads. */
   enigmaSolved?: boolean
   enigmaSolvedAt?: string | null
+  /** Participant id of team creator (captain); absent on older payloads. */
+  createdByParticipantId?: Id | null
+  finalTaskPhotoUrl?: string | null
+  finalTaskPhotoUploadedAt?: string | null
   members: TeamMemberResponse[]
 }
 

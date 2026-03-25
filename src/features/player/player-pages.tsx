@@ -261,7 +261,12 @@ function TeamSummaryCard({ team }: { team: TeamSummaryResponse }) {
             <div key={member.membershipId} className="flex gap-3 rounded-2xl border border-border bg-background/70 p-4">
               <MemberAvatar displayName={member.displayName} avatarUrl={member.avatarUrl} />
               <div className="min-w-0 flex-1">
-                <p className="font-medium text-foreground">{member.displayName}</p>
+                <p className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+                  <span>{member.displayName}</span>
+                  {team.createdByParticipantId && member.participantId === team.createdByParticipantId ? (
+                    <Badge tone="info">Капитан</Badge>
+                  ) : null}
+                </p>
                 <p className="mt-1 text-xs text-muted-foreground">Вступил {formatShortDateTime(member.joinedAt)}</p>
                 <p className="mt-3 text-xs uppercase tracking-wide text-muted-foreground">{member.status}</p>
               </div>
@@ -470,6 +475,7 @@ export function PlayerQuestionsPage() {
 }
 
 export function PlayerEnigmaPage() {
+  const session = useParticipantSession()
   const myTeam = useMyTeam()
   const queryClient = useQueryClient()
   const state = useQuery({
@@ -517,7 +523,7 @@ export function PlayerEnigmaPage() {
     },
   })
 
-  if (myTeam.isPending || (myTeam.data ? state.isPending : false)) {
+  if (session.isPending || myTeam.isPending || (myTeam.data ? state.isPending : false)) {
     return <LoadingScreen label="Подготавливаю Enigma..." />
   }
 
@@ -555,6 +561,8 @@ export function PlayerEnigmaPage() {
         effectivePositions={effectivePositions}
         setDeltas={setDeltas}
         saveDraft={{ mutate: saveDraft.mutate, isPending: saveDraft.isPending }}
+        teamSummary={myTeam.data}
+        participantId={session.data?.id ?? ''}
       />
     </MotionSection>
   )

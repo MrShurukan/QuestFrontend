@@ -193,6 +193,14 @@ export const participantApi = {
       body: json(payload),
     })
   },
+  uploadFinalTaskPhoto(file: File) {
+    const body = new FormData()
+    body.append('photo', file)
+    return request<TeamSummaryResponse>('/api/teams/me/final-task-photo', {
+      method: 'POST',
+      body,
+    })
+  },
   knownQuestions() {
     return request<QuestionSummaryResponse[]>('/api/questions/known')
   },

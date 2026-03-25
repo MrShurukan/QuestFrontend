@@ -2169,6 +2169,9 @@ export function AdminSupportTeamsPage() {
                     {team.enigmaSolvedAt ? ` · ${formatDateTime(team.enigmaSolvedAt)}` : ''}
                   </Badge>
                 ) : null}
+                {team.finalTaskPhotoUploadedAt || team.finalTaskPhotoUrl ? (
+                  <Badge tone="info">Фотография выгружена</Badge>
+                ) : null}
               </div>
               <Button asChild className="w-full">
                 <Link to={`/admin/support/teams/${team.id}`}>Открыть команду</Link>
@@ -2295,6 +2298,9 @@ export function AdminSupportTeamDetailsPage() {
                     {details.data.team.enigmaSolvedAt ? ` · ${formatDateTime(details.data.team.enigmaSolvedAt)}` : ''}
                   </Badge>
                 ) : null}
+                {details.data.team.finalTaskPhotoUploadedAt || details.data.team.finalTaskPhotoUrl ? (
+                  <Badge tone="info">Фотография выгружена</Badge>
+                ) : null}
               </div>
               <div className="space-y-3">
                 {details.data.team.members.map((member) => (
@@ -2303,7 +2309,13 @@ export function AdminSupportTeamDetailsPage() {
                       <div className="flex min-w-0 flex-1 items-center gap-3">
                         <MemberAvatar displayName={member.displayName} avatarUrl={member.avatarUrl} size="sm" />
                         <div className="min-w-0">
-                          <p className="font-medium text-foreground">{member.displayName}</p>
+                          <p className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+                            <span>{member.displayName}</span>
+                            {details.data.team.createdByParticipantId &&
+                            member.participantId === details.data.team.createdByParticipantId ? (
+                              <Badge tone="info">Капитан</Badge>
+                            ) : null}
+                          </p>
                           <p className="text-xs text-muted-foreground">
                             Вступил {formatShortDateTime(member.joinedAt)}
                             {member.provider !== 'local' ? ` · ${member.provider}` : null}
@@ -2331,6 +2343,37 @@ export function AdminSupportTeamDetailsPage() {
                   </div>
                 ))}
               </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>Финальное фото</CardTitle>
+              <CardDescription>Фотография после Enigma (одна на команду).</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {details.data.team.finalTaskPhotoUrl ? (
+                <>
+                  <img
+                    src={details.data.team.finalTaskPhotoUrl}
+                    alt="Финальное фото команды"
+                    className="max-h-80 w-full rounded-2xl border border-border object-contain"
+                  />
+                  <a
+                    className="inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
+                    href={details.data.team.finalTaskPhotoUrl}
+                    download
+                  >
+                    Скачать
+                  </a>
+                  {details.data.team.finalTaskPhotoUploadedAt ? (
+                    <p className="text-xs text-muted-foreground">
+                      Выгружено {formatDateTime(details.data.team.finalTaskPhotoUploadedAt)}
+                    </p>
+                  ) : null}
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Фото не загружено.</p>
+              )}
             </CardContent>
           </Card>
           <Card>
