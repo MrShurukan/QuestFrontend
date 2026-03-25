@@ -90,6 +90,10 @@ export interface CreateTeamRequest {
   joinSecret: string
 }
 
+export interface UpdateTeamJoinSecretRequest {
+  joinSecret: string
+}
+
 export interface JoinTeamRequest {
   teamId: Id
   joinSecret: string
@@ -124,6 +128,8 @@ export interface TeamSummaryResponse {
   createdByParticipantId?: Id | null
   finalTaskPhotoUrl?: string | null
   finalTaskPhotoUploadedAt?: string | null
+  /** Plaintext join secret; только для капитана в GET /api/teams/me. */
+  joinSecretForCaptain?: string | null
   members: TeamMemberResponse[]
 }
 

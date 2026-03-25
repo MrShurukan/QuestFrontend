@@ -35,10 +35,26 @@ import {
 } from '@/shared/ui/ui'
 import { formatDateTime, formatShortDateTime, formatTimeOnly } from '@/shared/utils/time'
 
-const createTeamSchema = z.object({
-  name: z.string().trim().min(2, 'Введите название команды'),
-  joinSecret: z.string().trim().min(3, 'Нужен секрет для присоединения'),
-})
+const createTeamSchema = z
+  .object({
+    name: z.string().trim().min(2, 'Введите название команды'),
+    joinSecret: z.string().trim().min(3, 'Нужен секрет для присоединения'),
+    joinSecretConfirm: z.string().trim().min(3, 'Повторите секрет'),
+  })
+  .refine((data) => data.joinSecret === data.joinSecretConfirm, {
+    message: 'Секреты должны совпадать',
+    path: ['joinSecretConfirm'],
+  })
+
+const captainUpdateSecretSchema = z
+  .object({
+    newJoinSecret: z.string().trim().min(3, 'Минимум 3 символа'),
+    newJoinSecretConfirm: z.string().trim().min(3, 'Повторите секрет'),
+  })
+  .refine((data) => data.newJoinSecret === data.newJoinSecretConfirm, {
+    message: 'Секреты должны совпадать',
+    path: ['newJoinSecretConfirm'],
+  })
 
 const joinTeamSchema = z.object({
   teamId: z.string().uuid('Выберите команду'),
@@ -110,6 +126,7 @@ export function PlayerTeamPage() {
     defaultValues: {
       name: '',
       joinSecret: '',
+      joinSecretConfirm: '',
     },
   })
 
@@ -168,7 +185,7 @@ export function PlayerTeamPage() {
       ) : null}
 
       {team ? (
-        <TeamSummaryCard team={team} />
+        <TeamSummaryCard team={team} participantId={session.data?.id ?? ''} />
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           <Card>
@@ -214,12 +231,20 @@ export function PlayerTeamPage() {
               <CardDescription>Придумайте название и секретное слово — по нему к вам смогут присоединиться другие.</CardDescription>
             </CardHeader>
             <CardContent>
-              <form className="space-y-4" onSubmit={createForm.handleSubmit((values) => createTeam.mutate(values))}>
+              <form
+                className="space-y-4"
+                onSubmit={createForm.handleSubmit((values) =>
+                  createTeam.mutate({ name: values.name, joinSecret: values.joinSecret }),
+                )}
+              >
                 <FormField label="Название команды" error={createForm.formState.errors.name?.message}>
                   <Input {...createForm.register('name')} placeholder="Энигма 7Б" />
                 </FormField>
                 <FormField label="Секрет для вступления" error={createForm.formState.errors.joinSecret?.message}>
-                  <Input {...createForm.register('joinSecret')} placeholder="секретное-слово" />
+                  <Input {...createForm.register('joinSecret')} type="password" autoComplete="new-password" placeholder="придумайте секрет" />
+                </FormField>
+                <FormField label="Повторите секрет" error={createForm.formState.errors.joinSecretConfirm?.message}>
+                  <Input {...createForm.register('joinSecretConfirm')} type="password" autoComplete="new-password" placeholder="ещё раз" />
                 </FormField>
                 <Button className="w-full" type="submit" disabled={createTeam.isPending}>
                   {createTeam.isPending ? 'Создаю...' : 'Создать команду'}
@@ -233,7 +258,25 @@ export function PlayerTeamPage() {
   )
 }
 
-function TeamSummaryCard({ team }: { team: TeamSummaryResponse }) {
+function TeamSummaryCard({ team, participantId }: { team: TeamSummaryResponse; participantId: string }) {
+  const queryClient = useQueryClient()
+  const isCaptain = Boolean(team.createdByParticipantId && participantId && team.createdByParticipantId === participantId)
+
+  const secretForm = useForm<z.infer<typeof captainUpdateSecretSchema>>({
+    resolver: zodResolver(captainUpdateSecretSchema),
+    defaultValues: { newJoinSecret: '', newJoinSecretConfirm: '' },
+  })
+
+  const updateJoinSecret = useMutation({
+    mutationFn: (joinSecret: string) => participantApi.updateMyTeamJoinSecret({ joinSecret }),
+    onSuccess: async () => {
+      toast.success('Секрет обновлён')
+      secretForm.reset()
+      await queryClient.invalidateQueries({ queryKey: queryKeys.teamsMe })
+    },
+    onError: (error) => toast.error(isApiError(error) ? error.message : 'Не удалось обновить секрет'),
+  })
+
   return (
     <Card>
       <CardHeader>
@@ -254,6 +297,47 @@ function TeamSummaryCard({ team }: { team: TeamSummaryResponse }) {
             title="На команде есть ограничения"
             description="Обратитесь к организаторам, чтобы выяснить причину ограничений."
           />
+        ) : null}
+
+        {isCaptain ? (
+          <div className="space-y-4 rounded-2xl border border-border bg-muted/20 p-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">Секрет для вступления</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Передайте это слово участникам, которые подключаются к команде. После смены секрета старый перестаёт действовать.
+              </p>
+              <p className="mt-3 break-all rounded-xl border border-border bg-background px-3 py-2 font-mono text-sm text-foreground">
+                {team.joinSecretForCaptain?.trim()
+                  ? team.joinSecretForCaptain
+                  : 'Не сохранён для отображения (старая команда). Задайте новый секрет ниже — участники будут использовать обновлённый.'}
+              </p>
+            </div>
+            <form
+              className="space-y-3"
+              onSubmit={secretForm.handleSubmit((values) => updateJoinSecret.mutate(values.newJoinSecret))}
+            >
+              <p className="text-sm font-medium text-foreground">Изменить секрет</p>
+              <FormField label="Новый секрет" error={secretForm.formState.errors.newJoinSecret?.message}>
+                <Input
+                  {...secretForm.register('newJoinSecret')}
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="новый секрет"
+                />
+              </FormField>
+              <FormField label="Повторите новый секрет" error={secretForm.formState.errors.newJoinSecretConfirm?.message}>
+                <Input
+                  {...secretForm.register('newJoinSecretConfirm')}
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="ещё раз"
+                />
+              </FormField>
+              <Button className="w-full sm:w-auto" type="submit" variant="secondary" disabled={updateJoinSecret.isPending}>
+                {updateJoinSecret.isPending ? 'Сохраняю...' : 'Сохранить новый секрет'}
+              </Button>
+            </form>
+          </div>
         ) : null}
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">

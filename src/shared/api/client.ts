@@ -46,6 +46,7 @@ import type {
   TeamSummaryResponse,
   TeamSupportDetailsResponse,
   UpdateQuestDayMessagesRequest,
+  UpdateTeamJoinSecretRequest,
 } from '@/shared/contracts/api'
 
 const QR_API_BASE_PATH = import.meta.env.VITE_QR_API_BASE_PATH || '/api/public/qr'
@@ -190,6 +191,12 @@ export const participantApi = {
   joinTeam(payload: { teamId: Id; joinSecret: string }) {
     return request<TeamSummaryResponse>('/api/teams/join', {
       method: 'POST',
+      body: json(payload),
+    })
+  },
+  updateMyTeamJoinSecret(payload: UpdateTeamJoinSecretRequest) {
+    return request<TeamSummaryResponse>('/api/teams/me/join-secret', {
+      method: 'PUT',
       body: json(payload),
     })
   },
