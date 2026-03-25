@@ -144,11 +144,20 @@ export const participantApi = {
       body: json(payload),
     })
   },
-  register(payload: { login: string; displayName: string; password: string; avatarFile?: File | null }) {
+  register(payload: {
+    login: string
+    displayName: string
+    password: string
+    acceptPersonalDataProcessing: boolean
+    avatarFile?: File | null
+  }) {
     const body = new FormData()
     body.append('login', payload.login)
     body.append('displayName', payload.displayName)
     body.append('password', payload.password)
+    if (payload.acceptPersonalDataProcessing) {
+      body.append('acceptPersonalDataProcessing', 'true')
+    }
     if (payload.avatarFile) {
       body.append('avatar', payload.avatarFile)
     }

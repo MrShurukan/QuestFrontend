@@ -144,6 +144,8 @@ export interface QuestionSummaryResponse {
   nextAllowedAnswerAt?: string | null
   lastAttemptAt?: string | null
   firstUnlockedAt: string
+  /** Filled for player known-questions API only when the question is solved (otherwise empty). */
+  footerHint: string
 }
 
 export interface QuestionDetailsResponse {

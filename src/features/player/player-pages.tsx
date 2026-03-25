@@ -9,6 +9,7 @@ import { toast } from 'sonner'
 import { z } from 'zod'
 
 import { EnigmaPlayerExperience } from '@/features/player/enigma/EnigmaPlayerExperience'
+import { PlayerStageHelp } from '@/features/player/PlayerStageHelp'
 import { describeAnswerResult, isApiError, participantApi } from '@/shared/api/client'
 import { type EnigmaStateResponse, type TeamSummaryResponse, queryKeys } from '@/shared/contracts/api'
 import { useParticipantLogout, useParticipantSession } from '@/features/session/session-hooks'
@@ -150,7 +151,11 @@ export function PlayerTeamPage() {
 
   return (
     <MotionSection>
-      <PageHeader title="Команда" description="Войдите в команду, чтобы получать вопросы по QR и участвовать в квесте." />
+      <PageHeader
+        title="Команда"
+        description="Войдите в команду, чтобы получать вопросы по QR и участвовать в квесте."
+        actions={<PlayerStageHelp stage="team" />}
+      />
 
       {session.data ? (
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/80 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
@@ -195,7 +200,10 @@ export function PlayerTeamPage() {
                     </Button>
                   </form>
               ) : (
-                  <EmptyState title="Нет команд для вступления" description="Создайте свою команду или подождите, пока кто-то создаст команду и поделится секретным словом." />
+                  <EmptyState
+                    title="Нет команд для вступления"
+                    description="Создайте свою команду, подождите новую команду или попробуйте позже — свободные слоты в уже созданных командах могут быть заняты."
+                  />
               )}
             </CardContent>
           </Card>
@@ -400,7 +408,11 @@ export function PlayerQuestionsPage() {
   if (!myTeam.data) {
     return (
       <MotionSection>
-        <PageHeader title="Вопросы" description="Здесь появятся вопросы, которые вы открыли по QR. Сначала войдите в команду и отсканируйте QR на локации." />
+        <PageHeader
+          title="Вопросы"
+          description="Здесь появятся вопросы, которые вы открыли по QR. Сначала войдите в команду и отсканируйте QR на локации."
+          actions={<PlayerStageHelp stage="questions" />}
+        />
         <EmptyState title="Команда не выбрана" description="Создайте или выберите команду, чтобы открыть игру." action={<Button asChild><Link to="/player/team">К странице команды</Link></Button>} />
       </MotionSection>
     )
@@ -408,7 +420,11 @@ export function PlayerQuestionsPage() {
 
   return (
     <MotionSection>
-      <PageHeader title="Открытые вопросы" description="Вопросы, которые команда уже открыла. Повторное сканирование не нужно." />
+      <PageHeader
+        title="Открытые вопросы"
+        description="Вопросы, которые команда уже открыла. Повторное сканирование не нужно."
+        actions={<PlayerStageHelp stage="questions" />}
+      />
 
       {questions.data && questions.data.length > 0 ? (
         <div className="grid gap-4 lg:grid-cols-2">
@@ -424,6 +440,9 @@ export function PlayerQuestionsPage() {
                   <CardDescription>Открыт {formatDateTime(question.firstUnlockedAt)}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  {question.isSolved && question.footerHint?.trim() ? (
+                    <p className="text-sm leading-relaxed text-muted-foreground">{question.footerHint}</p>
+                  ) : null}
                   <CooldownAlertBox targetIso={question.nextAllowedAnswerAt} title="Кулдаун активен" />
                   <Button asChild className="w-full">
                     <Link to={`/player/questions/${question.id}`}>Открыть вопрос</Link>
@@ -505,7 +524,11 @@ export function PlayerEnigmaPage() {
   if (!myTeam.data) {
     return (
       <MotionSection>
-        <PageHeader title="Enigma" description="Экран роторов открывается только после вступления в команду." />
+        <PageHeader
+          title="Enigma"
+          description="Экран роторов открывается только после вступления в команду."
+          actions={<PlayerStageHelp stage="enigma" />}
+        />
         <EmptyState title="Команда не выбрана" description="Создайте или выберите команду, чтобы открыть игру." action={<Button asChild><Link to="/player/team">К странице команды</Link></Button>} />
       </MotionSection>
     )
@@ -514,7 +537,7 @@ export function PlayerEnigmaPage() {
   if (!state.data) {
     return (
       <MotionSection>
-        <PageHeader title="Enigma" description="Экран Enigma пока недоступен." />
+        <PageHeader title="Enigma" description="Экран Enigma пока недоступен." actions={<PlayerStageHelp stage="enigma" />} />
         <EmptyState title="Enigma ещё не запущена" description="Обратитесь к организаторам или зайдите позже." />
       </MotionSection>
     )
@@ -525,6 +548,7 @@ export function PlayerEnigmaPage() {
       <PageHeader
         title="Enigma"
         description="Ротор открывается после решения вопроса с соответствующим тегом. Позиции сохраняются автоматически. Между попытками действует кулдаун."
+        actions={<PlayerStageHelp stage="enigma" />}
       />
       <EnigmaPlayerExperience
         state={state.data}
@@ -548,6 +572,7 @@ export function PlayerProfilePage() {
   if (!session.data) {
     return (
       <MotionSection>
+        <PageHeader title="Профиль" description="Войдите как участник, чтобы открыть профиль." actions={<PlayerStageHelp stage="profile" />} />
         <EmptyState title="Нет активной сессии" description="Войдите как участник, чтобы открыть профиль." action={<Button asChild><Link to="/player/login">Войти</Link></Button>} />
       </MotionSection>
     )
@@ -555,7 +580,7 @@ export function PlayerProfilePage() {
 
   return (
     <MotionSection>
-      <PageHeader title="Профиль" description="Ваши данные и выход из аккаунта." />
+      <PageHeader title="Профиль" description="Ваши данные и выход из аккаунта." actions={<PlayerStageHelp stage="profile" />} />
       <div className="grid gap-4 xl:grid-cols-[1fr_0.8fr]">
         <Card>
           <CardHeader>

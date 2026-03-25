@@ -8,12 +8,28 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
+import { PERSONAL_DATA_POLICY_URL } from '@/features/public/privacy-policy'
 import { adminApi, isApiError, participantApi, publicApi } from '@/shared/api/client'
 import { queryKeys } from '@/shared/contracts/api'
 import { describeQrState } from '@/features/public/qr-state'
 import { SessionRoleNotice } from '@/features/session/session'
 import { useAdminSession, useParticipantSession } from '@/features/session/session-hooks'
-import { AlertBox, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, EmptyState, Input, LoadingScreen, PageHeader, RichText } from '@/shared/ui/ui'
+import {
+  AlertBox,
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  Checkbox,
+  EmptyState,
+  Input,
+  LoadingScreen,
+  PageHeader,
+  RichText,
+} from '@/shared/ui/ui'
 import { questDayStatusLabel } from '@/shared/utils/quest-day'
 import { formatDateTime } from '@/shared/utils/time'
 
@@ -28,10 +44,15 @@ const participantRegisterSchema = z
     displayName: z.string().trim().min(2, 'Введите ФИО').max(200),
     password: z.string().min(8, 'Пароль не короче 8 символов'),
     confirmPassword: z.string().min(1, 'Повторите пароль'),
+    acceptPersonalData: z.boolean(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Пароли не совпадают',
     path: ['confirmPassword'],
+  })
+  .refine((data) => data.acceptPersonalData === true, {
+    message: 'Нужно согласие на обработку персональных данных',
+    path: ['acceptPersonalData'],
   })
 
 const adminLoginSchema = z.object({
@@ -198,6 +219,7 @@ export function PlayerLoginPage() {
       displayName: '',
       password: '',
       confirmPassword: '',
+      acceptPersonalData: false,
     },
   })
 
@@ -288,6 +310,7 @@ export function PlayerLoginPage() {
                   login: values.login,
                   displayName: values.displayName,
                   password: values.password,
+                  acceptPersonalDataProcessing: values.acceptPersonalData,
                   avatarFile,
                 }),
               )}
@@ -312,6 +335,24 @@ export function PlayerLoginPage() {
                   onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
                 />
               </FormField>
+              <div className="space-y-2">
+                <Checkbox
+                  label="Согласен с обработкой персональных данных"
+                  description={
+                    <span>
+                      Текст политики:{' '}
+                      <a href={PERSONAL_DATA_POLICY_URL} className="text-primary underline underline-offset-2" target="_blank" rel="noreferrer">
+                        ознакомиться
+                      </a>
+                      .
+                    </span>
+                  }
+                  {...registerForm.register('acceptPersonalData')}
+                />
+                {registerForm.formState.errors.acceptPersonalData ? (
+                  <p className="text-sm text-danger">{registerForm.formState.errors.acceptPersonalData.message}</p>
+                ) : null}
+              </div>
               <Button className="w-full" type="submit" disabled={registerMutation.isPending}>
                 {registerMutation.isPending ? 'Регистрирую...' : 'Зарегистрироваться'}
               </Button>

@@ -247,7 +247,9 @@ export function EnigmaPlayerExperience({
               <Card>
                 <CardHeader>
                   <CardTitle>Роторы</CardTitle>
-                  <CardDescription>Крутите диск или используйте кнопки. На телефоне сохранение после отпускания пальца.</CardDescription>
+                  <CardDescription>
+                    Крутите диск или используйте кнопки. На телефоне позиция сохраняется после остановки прокрутки или при уходе фокуса с ротора.
+                  </CardDescription>
                 </CardHeader>
                 <CardContent className="grid gap-4 sm:grid-cols-2">
                   {state.rotors.map((rotor) =>
