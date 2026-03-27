@@ -25,11 +25,12 @@ import {
   CooldownAlertBox,
   Modal,
 } from '@/shared/ui/ui'
+import { IMAGE_UPLOAD_ACCEPT } from '@/shared/utils/image-upload'
 
 const EXIT_MS = 420
 const GAP_MS = 300
 /** Failure path: faster typewriter. Success: slower for emphasis. */
-const TYPE_MS_FAILURE = 14
+const TYPE_MS_FAILURE = 7
 const TYPE_MS_SUCCESS = 26
 /** After failure text is fully typed, hold paper before fade + toast + rotors. */
 const WRONG_HOLD_AFTER_TYPING_MS = 2000
@@ -385,7 +386,7 @@ export function EnigmaPlayerExperience({
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/jpeg,image/png,image/webp"
+                    accept={IMAGE_UPLOAD_ACCEPT}
                     className="sr-only"
                     onChange={onFinalPhotoSelected}
                   />

@@ -177,6 +177,14 @@ export const participantApi = {
       method: 'POST',
     })
   },
+  uploadAvatar(file: File) {
+    const body = new FormData()
+    body.append('avatar', file)
+    return request<ParticipantProfileResponse>('/api/participant/auth/avatar', {
+      method: 'POST',
+      body,
+    })
+  },
   availableTeams() {
     return request<TeamSummaryResponse[]>('/api/teams/available')
   },

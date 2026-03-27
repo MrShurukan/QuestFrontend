@@ -26,6 +26,7 @@ import {
 } from '@/shared/contracts/api'
 import { useAdminLogout, useAdminSession } from '@/features/session/session-hooks'
 import { AlertBox, Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Divider, EmptyState, HelpBadge, Input, JsonBlock, KeyValue, LoadingScreen, MemberAvatar, Modal, PageHeader, Select, StatCard, TagChip, Textarea } from '@/shared/ui/ui'
+import { IMAGE_UPLOAD_ACCEPT } from '@/shared/utils/image-upload'
 import { questDayStatusLabel } from '@/shared/utils/quest-day'
 import { formatDateTime, formatShortDateTime } from '@/shared/utils/time'
 import { buildTimezoneOptions } from '@/shared/utils/timezone'
@@ -1100,7 +1101,7 @@ export function AdminQuestionsPage() {
                 <div className="space-y-3">
                   <Input
                     type="file"
-                    accept="image/jpeg,image/png,image/webp"
+                    accept={IMAGE_UPLOAD_ACCEPT}
                     disabled={uploadQuestionImage.isPending}
                     onChange={(event) => {
                       const file = event.target.files?.[0]

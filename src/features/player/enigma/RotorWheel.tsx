@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { Lock, Unlock } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const ITEM_PX = 40
 const VIEW_H = 176
@@ -34,6 +35,7 @@ export function RotorWheel({
   onChange: (v: number) => void
   onCommit: (v: number) => void
 }) {
+  const [scrollLocked, setScrollLocked] = useState(true)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const commitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const scrollIdleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -101,7 +103,7 @@ export function RotorWheel({
 
   useEffect(() => {
     const el = scrollerRef.current
-    if (!el) return
+    if (!el || scrollLocked) return
 
     const onScroll = () => {
       scheduleScrollIdleCommit()
@@ -123,7 +125,7 @@ export function RotorWheel({
       el.removeEventListener('scrollend', onScrollEnd)
       if (scrollIdleTimerRef.current) clearTimeout(scrollIdleTimerRef.current)
     }
-  }, [scheduleScrollIdleCommit, syncFromDom])
+  }, [scheduleScrollIdleCommit, syncFromDom, scrollLocked])
 
   const scheduleButtonCommit = useCallback(
     (v: number) => {
@@ -156,7 +158,7 @@ export function RotorWheel({
       className="rotor-wheel-enclosure rounded-2xl border border-zinc-700/80 bg-gradient-to-b from-zinc-900 via-zinc-800 to-zinc-950 p-3 shadow-[inset_0_2px_12px_rgba(0,0,0,0.45)]"
       style={{
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 8px 24px rgba(0,0,0,0.35)',
-        touchAction: 'pan-y',
+        touchAction: scrollLocked ? 'manipulation' : 'pan-y',
       }}
     >
       <div className="mb-2 flex items-center justify-between gap-2 px-1">
@@ -175,7 +177,10 @@ export function RotorWheel({
 
       <div
         className="relative overflow-hidden rounded-xl border border-zinc-600/90"
-        style={{ touchAction: 'pan-y', overscrollBehavior: 'contain' }}
+        style={{
+          touchAction: scrollLocked ? 'none' : 'pan-y',
+          overscrollBehavior: 'contain',
+        }}
       >
         <div
           className="pointer-events-none absolute left-0 right-0 top-1/2 z-10 h-10 -translate-y-1/2 border-y border-red-600/70 bg-red-500/5"
@@ -183,13 +188,13 @@ export function RotorWheel({
         />
         <div
           ref={scrollerRef}
-          tabIndex={0}
+          tabIndex={scrollLocked ? -1 : 0}
           role="slider"
           aria-valuemin={min}
           aria-valuemax={max}
           aria-valuenow={value}
           aria-label={`Ротор ${label}, значение ${value}`}
-          onKeyDown={onKeyDown}
+          onKeyDown={scrollLocked ? undefined : onKeyDown}
           onBlur={() => {
             if (commitTimerRef.current) {
               clearTimeout(commitTimerRef.current)
@@ -201,7 +206,11 @@ export function RotorWheel({
             }
             syncFromDom()
           }}
-          className="rotor-scroller h-44 w-full overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#d4d4d8] via-[#e4e4e7] to-[#a1a1aa] pl-2 outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 [&::-webkit-scrollbar]:hidden"
+          className={
+            scrollLocked
+              ? 'rotor-scroller h-44 w-full overflow-hidden overflow-x-hidden bg-gradient-to-b from-[#d4d4d8] via-[#e4e4e7] to-[#a1a1aa] pl-2 outline-none [&::-webkit-scrollbar]:hidden pointer-events-none'
+              : 'rotor-scroller h-44 w-full overflow-y-auto overflow-x-hidden bg-gradient-to-b from-[#d4d4d8] via-[#e4e4e7] to-[#a1a1aa] pl-2 outline-none focus-visible:ring-2 focus-visible:ring-red-500/60 [&::-webkit-scrollbar]:hidden'
+          }
           style={{
             scrollSnapType: 'y mandatory',
             scrollbarWidth: 'none',
@@ -209,12 +218,20 @@ export function RotorWheel({
             boxShadow: 'inset 0 0 20px rgba(0,0,0,0.12)',
             paddingLeft: GEAR_W,
           }}
-          onPointerUp={() => {
-            scheduleScrollIdleCommit()
-          }}
-          onPointerCancel={() => {
-            scheduleScrollIdleCommit()
-          }}
+          onPointerUp={
+            scrollLocked
+              ? undefined
+              : () => {
+                  scheduleScrollIdleCommit()
+                }
+          }
+          onPointerCancel={
+            scrollLocked
+              ? undefined
+              : () => {
+                  scheduleScrollIdleCommit()
+                }
+          }
         >
           <div className="pointer-events-none absolute bottom-0 left-0 top-0 z-[1] w-7 rounded-l-lg border-r border-zinc-600/90 bg-gradient-to-b from-zinc-300 via-zinc-100 to-zinc-400">
             <div
@@ -249,6 +266,16 @@ export function RotorWheel({
           }}
         >
           −
+        </button>
+        <button
+          type="button"
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-500 bg-gradient-to-b from-zinc-200 to-zinc-400 text-zinc-900 shadow-md transition hover:brightness-110 active:scale-95"
+          title={scrollLocked ? 'Разрешить прокрутку ротора' : 'Заблокировать прокрутку ротора'}
+          aria-label={scrollLocked ? 'Разрешить прокрутку ротора' : 'Заблокировать прокрутку ротора'}
+          aria-pressed={!scrollLocked}
+          onClick={() => setScrollLocked((prev) => !prev)}
+        >
+          {scrollLocked ? <Unlock className="h-5 w-5" strokeWidth={2.25} /> : <Lock className="h-5 w-5" strokeWidth={2.25} />}
         </button>
         <button
           type="button"

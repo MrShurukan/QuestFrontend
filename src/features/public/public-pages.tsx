@@ -8,7 +8,6 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
-import { PERSONAL_DATA_POLICY_URL } from '@/features/public/privacy-policy'
 import { adminApi, isApiError, participantApi, publicApi } from '@/shared/api/client'
 import { queryKeys } from '@/shared/contracts/api'
 import { describeQrState } from '@/features/public/qr-state'
@@ -30,6 +29,7 @@ import {
   PageHeader,
   RichText,
 } from '@/shared/ui/ui'
+import { IMAGE_UPLOAD_ACCEPT } from '@/shared/utils/image-upload'
 import { questDayStatusLabel } from '@/shared/utils/quest-day'
 import { formatDateTime } from '@/shared/utils/time'
 
@@ -330,7 +330,7 @@ export function PlayerLoginPage() {
               <FormField label="Аватар (необязательно)">
                 <Input
                   type="file"
-                  accept="image/jpeg,image/png,image/webp"
+                  accept={IMAGE_UPLOAD_ACCEPT}
                   className="py-2 file:mr-3 file:rounded-lg file:border-0 file:bg-muted file:px-3 file:py-1.5 file:text-sm"
                   onChange={(e) => setAvatarFile(e.target.files?.[0] ?? null)}
                 />
@@ -340,11 +340,7 @@ export function PlayerLoginPage() {
                   label="Согласен с обработкой персональных данных"
                   description={
                     <span>
-                      Текст политики:{' '}
-                      <a href={PERSONAL_DATA_POLICY_URL} className="text-primary underline underline-offset-2" target="_blank" rel="noreferrer">
-                        ознакомиться
-                      </a>
-                      .
+                      Передавая свои персональные данные на сервер quest.mrshurukan.ru, я выражаю согласие на их последующую обработку и хранение в соответствии с Федеральным законом Российской Федерации N152-ФЗ «О персональных данных»
                     </span>
                   }
                   {...registerForm.register('acceptPersonalData')}

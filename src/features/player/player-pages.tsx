@@ -1,8 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
-import { CircleHelp, LogOut } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { CircleHelp, Copy, LogOut } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -33,6 +33,7 @@ import {
   RichText,
   TagChip,
 } from '@/shared/ui/ui'
+import { IMAGE_UPLOAD_ACCEPT } from '@/shared/utils/image-upload'
 import { formatDateTime, formatShortDateTime, formatTimeOnly } from '@/shared/utils/time'
 
 const createTeamSchema = z
@@ -656,6 +657,20 @@ export function PlayerProfilePage() {
   const session = useParticipantSession()
   const logout = useParticipantLogout()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const [idModalOpen, setIdModalOpen] = useState(false)
+
+  const uploadAvatar = useMutation({
+    mutationFn: (file: File) => participantApi.uploadAvatar(file),
+    onSuccess: async () => {
+      toast.success('Аватар обновлён')
+      await queryClient.invalidateQueries({ queryKey: queryKeys.participantSession })
+    },
+    onError: (error) => {
+      toast.error(isApiError(error) ? error.message : 'Не удалось загрузить аватар')
+    },
+  })
 
   if (session.isPending) {
     return <LoadingScreen label="Открываю профиль..." />
@@ -680,13 +695,40 @@ export function PlayerProfilePage() {
             <CardDescription>Логин: {session.data.login ?? session.data.providerSubject}</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
-            <div className="md:col-span-2 flex items-center gap-3">
+            <div className="md:col-span-2 flex flex-col gap-3 sm:flex-row sm:items-center">
               <MemberAvatar displayName={session.data.displayName} avatarUrl={session.data.avatarUrl} size="lg" />
+              <div className="flex min-w-0 flex-col gap-2">
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept={IMAGE_UPLOAD_ACCEPT}
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    e.target.value = ''
+                    if (file) void uploadAvatar.mutateAsync(file)
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-fit"
+                  disabled={uploadAvatar.isPending}
+                  onClick={() => avatarInputRef.current?.click()}
+                >
+                  {uploadAvatar.isPending ? 'Загрузка…' : 'Сменить фото'}
+                </Button>
+                <p className="text-xs text-muted-foreground">JPEG, PNG, WebP или HEIC, до 25 МБ</p>
+              </div>
             </div>
             <KeyValue label="Учётная запись" value={session.data.provider === 'local' ? 'Локальная' : session.data.provider} />
             <KeyValue label="Статус" value={session.data.isBlocked ? 'Заблокирован' : 'Активен'} />
-            <KeyValue label="Аватар" value={session.data.avatarUrl || 'не загружен'} />
-            <KeyValue label="ID участника" value={session.data.id} />
+            <div className="md:col-span-2">
+              <Button type="button" variant="outline" size="sm" onClick={() => setIdModalOpen(true)}>
+                Мой ID участника
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -715,6 +757,30 @@ export function PlayerProfilePage() {
           </CardContent>
         </Card>
       </div>
+
+      <Modal open={idModalOpen} title="ID участника" onClose={() => setIdModalOpen(false)} className="max-w-md">
+        <p className="break-all font-mono text-sm select-all">{session.data.id}</p>
+        <p className="mt-3 text-sm text-muted-foreground">Нужен организатору квеста, если он его попросит</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={() => setIdModalOpen(false)}>
+            Закрыть
+          </Button>
+          <Button
+            type="button"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(session.data.id)
+                toast.success('ID скопирован')
+              } catch {
+                toast.error('Не удалось скопировать')
+              }
+            }}
+          >
+            <Copy className="mr-2 h-4 w-4" />
+            Копировать
+          </Button>
+        </div>
+      </Modal>
     </MotionSection>
   )
 }
